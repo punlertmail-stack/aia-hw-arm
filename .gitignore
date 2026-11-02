@@ -13,6 +13,9 @@ private/
 data/private/
 setsmart/
 *SETSMART*
+# ข้อยกเว้น: ตัวชี้วัดที่คำนวณแล้ว (ไม่ใช่ไฟล์ดิบ) และโค้ดตัวอ่าน — ดู help.md ข้อ 1
+!output/data/setsmart.js
+!screener/read_setsmart.py
 
 # System and tool clutter
 .DS_Store
