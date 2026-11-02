@@ -44,12 +44,18 @@ dashboard 1 หน้า เปิดผ่าน GitHub Pages
 
 | Preset | เกณฑ์ผ่าน/ไม่ผ่าน | น้ำหนักคะแนน |
 |---|---|---|
-| คุณภาพราคาเหมาะสม | ROE ล่าสุด ≥ 15% · ROE ต่ำสุด 3 ปี ≥ 10% · กำไร > 0 ทุกปี · IBD/E ≤ 1.0 · P/E ≤ 20 | ROE เฉลี่ย 40 · earnings yield 30 · ROE นิ่ง 15 · CFO/กำไร 15 |
-| ปันผลยั่งยืน | yield ≥ 4% · จ่ายต่อเนื่อง 4 ปี · payout ≤ 90% · FCF ÷ ปันผล 3 ปี ≥ 1.0 | yield 35 · FCF coverage 25 · payout ต่ำ 20 · ปีต่อเนื่อง 20 |
-| หุ้นถูก | P/E ≤ 8 · P/BV ≤ 0.8 · กำไร > 0 · IBD/E ≤ 1.0 · current ratio ≥ 1.2 | earnings yield 35 · book yield 35 · FCF yield 30 |
-| หุ้นเติบโต | CAGR รายได้ 3 ปี ≥ 10% · CAGR กำไร 3 ปี ≥ 10% · ROE ≥ 10% · PEG ≤ 2 | CAGR กำไร 35 · CAGR รายได้ 25 · ROE 20 · PEG ต่ำ 20 |
+| Preset | เกณฑ์ผ่าน/ไม่ผ่าน | น้ำหนักคะแนน | ผ่าน (Yahoo / SETSMART) |
+|---|---|---|---|
+| คุณภาพราคาเหมาะสม | ROE ล่าสุด ≥ 20% · ROE ต่ำสุด 3 ปี ≥ 10% · กำไร > 0 ทุกปี · IBD/E ≤ 1.0 · P/E ≤ 20 | ROE เฉลี่ย 40 · earnings yield 30 · ROE นิ่ง 15 · CFO/กำไร 15 | 33 / 22 |
+| ปันผลยั่งยืน | yield ≥ 6% · จ่ายต่อเนื่อง 4 ปี · payout ≤ 80% · FCF ÷ ปันผล 3 ปี ≥ 1.2 | yield 35 · FCF coverage 25 · payout ต่ำ 20 · ปีต่อเนื่อง 20 | 39 / 35 |
+| หุ้นถูก | P/E ≤ 8 · P/BV ≤ 0.8 · กำไร > 0 · IBD/E ≤ 1.0 · current ratio ≥ 1.2 | earnings yield 35 · book yield 35 · FCF yield 30 | 27 / 31 |
+| หุ้นเติบโต | CAGR รายได้ 3 ปี ≥ 10% · CAGR กำไร 3 ปี ≥ 15% · ROE ≥ 10% · PEG ≤ 2 | CAGR กำไร 35 · CAGR รายได้ 25 · ROE 20 · PEG ต่ำ 20 | 37 / 30 |
 
-- ธนาคาร/การเงินไม่ใช้เกณฑ์ IBD/E และ current ratio เพราะหนี้คือวัตถุดิบของธุรกิจ
+ฐานคัด: market cap ≥ 1,000 ลบ. = Yahoo 505 ตัว / SETSMART 489 ตัว (build 2026-11-02)
+
+- ธนาคาร/การเงินไม่ใช้เกณฑ์ IBD/E, current ratio และ FCF ÷ ปันผล เพราะหนี้และเงินสดหมุนเวียนคือวัตถุดิบของธุรกิจ
+- "3 ปี" = ช่วง 12 เดือนที่ห่างกันพอดี 1 ปี: Yahoo ใช้งบรายปี FY · SETSMART ใช้ TTM ที่จบไตรมาสเดียวกัน (เช่น 2023Q2 → 2026Q2)
+- ปันผลจ่ายโหมด SETSMART ใช้ปันผลต่อหุ้นที่ XD ใน 12 เดือน × จำนวนหุ้น จาก Yahoo เพราะคอลัมน์ `dividends_paid` ของ SETSMART ว่าง 61% ของแถว
 - คะแนน = ค่าเฉลี่ยถ่วงน้ำหนักของ percentile แต่ละตัวชี้วัด เทียบในกลุ่มที่ผ่านเกณฑ์
 
 ไฟล์ที่ต้องได้: `output/index.html` · `output/app.js` · `output/style.css` · `output/data/yahoo.js` · `output/data/setsmart.js` · `presets.json` · `screener/*.py` (สร้างไฟล์ข้อมูลจากข้อมูลในเครื่อง)
