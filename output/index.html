@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thai Stock Screener</title>
+<meta name="description" content="คัดหุ้นไทย 4 มุมมอง: คุณภาพราคาเหมาะสม · ปันผลยั่งยืน · หุ้นถูก · หุ้นเติบโต">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="title-row">
+    <h1>Thai Stock Screener</h1>
+    <div class="source" role="group" aria-label="แหล่งข้อมูล">
+      <button type="button" data-source="yahoo">Yahoo</button>
+      <button type="button" data-source="setsmart">SETSMART</button>
+    </div>
+  </div>
+  <p class="badges" id="badges"></p>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="มุมมอง"></nav>
+  <p class="preset-desc" id="preset-desc"></p>
+</header>
+
+<main class="layout">
+  <aside class="panel" id="panel">
+    <details open>
+      <summary>เกณฑ์และน้ำหนัก</summary>
+      <section>
+        <h2>ฐานการคัด</h2>
+        <div id="universe"></div>
+      </section>
+      <section>
+        <h2>เกณฑ์ผ่าน/ไม่ผ่าน</h2>
+        <div id="gates"></div>
+      </section>
+      <section>
+        <h2>น้ำหนักคะแนน</h2>
+        <div id="weights"></div>
+      </section>
+      <button type="button" class="reset" id="reset">คืนค่าตั้งต้น</button>
+    </details>
+  </aside>
+
+  <section class="results">
+    <div class="toolbar">
+      <p id="summary" aria-live="polite"></p>
+      <label class="search"><span class="sr">ค้นหา</span><input type="search" id="search" placeholder="ค้นหา ticker หรือชื่อ"></label>
+      <label class="toggle"><input type="checkbox" id="show-failed"> แสดงตัวที่ไม่ผ่าน</label>
+    </div>
+    <div class="table-wrap" id="table-wrap">
+      <table id="table"></table>
+    </div>
+    <p class="hint">กดตัวเลขเพื่อดูที่มา · กดชื่อหุ้นเพื่อดูรายละเอียดและกราฟย้อนหลัง · กดหัวคอลัมน์เพื่อเรียง</p>
+  </section>
+</main>
+
+<aside class="detail" id="detail" hidden aria-labelledby="detail-title">
+  <div class="detail-head">
+    <h2 id="detail-title"></h2>
+    <button type="button" class="close" id="detail-close" aria-label="ปิด">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</aside>
+
+<div class="popover" id="popover" role="dialog" hidden></div>
+
+<footer class="foot">
+  <p><strong>ไม่ใช่คำแนะนำการลงทุน</strong> — เครื่องมือคัดกรองเพื่อเลือกหุ้นไปศึกษาต่อ ตัวเลขอาจคลาดจากงบจริง ตรวจกับเอกสารบริษัทก่อนตัดสินใจ</p>
+  <p id="foot-source"></p>
+  <p><a href="https://github.com/punlertmail-stack/aia-hw-arm/blob/main/spec.md">spec.md</a> · <a href="https://github.com/punlertmail-stack/aia-hw-arm">GitHub repo</a></p>
+</footer>
+
+<script src="data/presets.js"></script>
+<script src="data/yahoo.js"></script>
+<script src="data/setsmart.js" onerror="console.info('ไม่มี setsmart.js — ใช้โหมด Yahoo อย่างเดียว')"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

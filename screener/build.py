@@ -2,6 +2,7 @@
 
   output/data/yahoo.js     จาก <workspace>/data/raw/*.json (Yahoo Finance)
   output/data/setsmart.js  จาก <workspace>/DATA001/setsmart_fundamentals_*.xlsx (ถ้ามีไฟล์)
+  output/data/presets.js   สำเนาของ presets.json ให้หน้าเว็บโหลดได้แม้เปิดแบบ file://
 
 ส่งออกเฉพาะตัวชี้วัดที่คำนวณแล้ว + ประวัติ รายได้/กำไร/ROE/FCF/ปันผลจ่าย สำหรับกราฟ ไม่มีไฟล์ดิบ
 
@@ -65,6 +66,9 @@ def main():
     ws = Path(a.workspace)
     presets = json.loads((ROOT / "presets.json").read_text(encoding="utf-8"))
     built = datetime.now(ICT).strftime("%Y-%m-%d %H:%M ICT")
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / "presets.js").write_text("window.SCREENER_PRESETS = "
+                                    + json.dumps(presets, ensure_ascii=False, indent=1) + ";\n", encoding="utf-8")
 
     yahoo = read_yahoo.load(ws / "data" / "raw")
     if not yahoo:

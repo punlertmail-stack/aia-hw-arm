@@ -39,10 +39,11 @@ def field_sources():
     src["gross_profit"] = {"name": "gross_profit", "how": "รวม 4 ไตรมาส"}
     src["equity_prev"] = {"name": "equity_parent", "how": "ณ สิ้นงวดเดียวกันปีก่อน"}
     src["normalized_np"] = {"name": "(ไม่มีใน SETSMART)", "how": ""}
-    src["div_paid"] = {"name": "Yahoo dividends × sharesOutstanding",
+    yahoo = "https://finance.yahoo.com/quote/{t}.BK/"
+    src["div_paid"] = {"name": "Yahoo dividends × sharesOutstanding", "url": yahoo + "history/",
                        "how": "ปันผลต่อหุ้นที่ XD ใน 12 เดือนของช่วง × จำนวนหุ้นปัจจุบัน (dividends_paid ของ SETSMART ว่าง 61% ของแถว)"}
-    src["price"] = {"name": "Yahoo Close (ราคาปิด)", "how": "Yahoo"}
-    src["shares"] = {"name": "Yahoo sharesOutstanding", "how": "Yahoo"}
+    src["price"] = {"name": "Yahoo Close (ราคาปิด)", "how": "Yahoo", "url": yahoo + "history/"}
+    src["shares"] = {"name": "Yahoo sharesOutstanding", "how": "Yahoo", "url": yahoo + "key-statistics/"}
     return src
 
 

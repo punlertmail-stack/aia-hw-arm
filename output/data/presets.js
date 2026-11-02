@@ -1,0 +1,275 @@
+window.SCREENER_PRESETS = {
+ "universe": {
+  "min_mcap": 1000,
+  "note": "หุ้นที่มี market cap (ล้านบาท) ต่ำกว่านี้ไม่นำมาคัด ปรับได้บนหน้าจอ"
+ },
+ "presets": [
+  {
+   "id": "quality",
+   "name": "คุณภาพราคาเหมาะสม",
+   "desc": "ธุรกิจทำกำไรบนทุนสูงและสม่ำเสมอ หนี้ไม่มาก และราคายังไม่แพง",
+   "gates": [
+    {
+     "metric": "roe_last",
+     "op": ">=",
+     "value": 20,
+     "min": 0,
+     "max": 40,
+     "step": 1
+    },
+    {
+     "metric": "roe_min3",
+     "op": ">=",
+     "value": 10,
+     "min": 0,
+     "max": 40,
+     "step": 1
+    },
+    {
+     "metric": "np_min3",
+     "op": ">",
+     "value": 0,
+     "min": 0,
+     "max": 1000,
+     "step": 50
+    },
+    {
+     "metric": "de",
+     "op": "<=",
+     "value": 1.0,
+     "min": 0,
+     "max": 3,
+     "step": 0.1,
+     "skip_fin": true
+    },
+    {
+     "metric": "pe",
+     "op": "<=",
+     "value": 20,
+     "min": 3,
+     "max": 60,
+     "step": 1
+    }
+   ],
+   "score": [
+    {
+     "metric": "roe_avg3",
+     "weight": 40,
+     "better": "high"
+    },
+    {
+     "metric": "ey",
+     "weight": 30,
+     "better": "high"
+    },
+    {
+     "metric": "roe_sd3",
+     "weight": 15,
+     "better": "low"
+    },
+    {
+     "metric": "cfo_np3",
+     "weight": 15,
+     "better": "high"
+    }
+   ]
+  },
+  {
+   "id": "dividend",
+   "name": "ปันผลยั่งยืน",
+   "desc": "ปันผลสูง จ่ายต่อเนื่อง และจ่ายจากเงินสดที่หาได้จริง ไม่ใช่กู้มาจ่าย",
+   "gates": [
+    {
+     "metric": "dy",
+     "op": ">=",
+     "value": 6,
+     "min": 0,
+     "max": 12,
+     "step": 0.5
+    },
+    {
+     "metric": "div_streak",
+     "op": ">=",
+     "value": 4,
+     "min": 1,
+     "max": 5,
+     "step": 1
+    },
+    {
+     "metric": "payout",
+     "op": "<=",
+     "value": 80,
+     "min": 20,
+     "max": 150,
+     "step": 5
+    },
+    {
+     "metric": "fcf_cov3",
+     "op": ">=",
+     "value": 1.2,
+     "min": 0,
+     "max": 3,
+     "step": 0.1,
+     "skip_fin": true
+    }
+   ],
+   "score": [
+    {
+     "metric": "dy",
+     "weight": 35,
+     "better": "high"
+    },
+    {
+     "metric": "fcf_cov3",
+     "weight": 25,
+     "better": "high"
+    },
+    {
+     "metric": "payout",
+     "weight": 20,
+     "better": "low"
+    },
+    {
+     "metric": "div_streak",
+     "weight": 20,
+     "better": "high"
+    }
+   ]
+  },
+  {
+   "id": "value",
+   "name": "หุ้นถูก",
+   "desc": "ราคาต่ำเมื่อเทียบกับกำไร ทุน และเงินสด โดยฐานะการเงินยังไม่น่ากังวล",
+   "gates": [
+    {
+     "metric": "pe",
+     "op": "<=",
+     "value": 8,
+     "min": 2,
+     "max": 20,
+     "step": 0.5
+    },
+    {
+     "metric": "pbv",
+     "op": "<=",
+     "value": 0.8,
+     "min": 0.2,
+     "max": 3,
+     "step": 0.1
+    },
+    {
+     "metric": "np_last",
+     "op": ">",
+     "value": 0,
+     "min": 0,
+     "max": 1000,
+     "step": 50
+    },
+    {
+     "metric": "de",
+     "op": "<=",
+     "value": 1.0,
+     "min": 0,
+     "max": 3,
+     "step": 0.1,
+     "skip_fin": true
+    },
+    {
+     "metric": "cr",
+     "op": ">=",
+     "value": 1.2,
+     "min": 0.5,
+     "max": 3,
+     "step": 0.1,
+     "skip_fin": true
+    }
+   ],
+   "score": [
+    {
+     "metric": "ey",
+     "weight": 35,
+     "better": "high"
+    },
+    {
+     "metric": "by",
+     "weight": 35,
+     "better": "high"
+    },
+    {
+     "metric": "fcfy",
+     "weight": 30,
+     "better": "high"
+    }
+   ]
+  },
+  {
+   "id": "growth",
+   "name": "หุ้นเติบโต",
+   "desc": "รายได้และกำไรโตต่อเนื่อง ROE ดี และราคาไม่แพงเกินการเติบโต",
+   "gates": [
+    {
+     "metric": "rev_cagr3",
+     "op": ">=",
+     "value": 10,
+     "min": 0,
+     "max": 40,
+     "step": 1
+    },
+    {
+     "metric": "np_cagr3",
+     "op": ">=",
+     "value": 15,
+     "min": 0,
+     "max": 50,
+     "step": 1
+    },
+    {
+     "metric": "roe_last",
+     "op": ">=",
+     "value": 10,
+     "min": 0,
+     "max": 40,
+     "step": 1
+    },
+    {
+     "metric": "peg",
+     "op": "<=",
+     "value": 2,
+     "min": 0.5,
+     "max": 5,
+     "step": 0.1
+    },
+    {
+     "metric": "np_min3",
+     "op": ">",
+     "value": 0,
+     "min": 0,
+     "max": 1000,
+     "step": 50
+    }
+   ],
+   "score": [
+    {
+     "metric": "np_cagr3",
+     "weight": 35,
+     "better": "high"
+    },
+    {
+     "metric": "rev_cagr3",
+     "weight": 25,
+     "better": "high"
+    },
+    {
+     "metric": "roe_last",
+     "weight": 20,
+     "better": "high"
+    },
+    {
+     "metric": "peg",
+     "weight": 20,
+     "better": "low"
+    }
+   ]
+  }
+ ]
+};
