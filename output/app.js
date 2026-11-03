@@ -23,12 +23,16 @@
       weights: p.score.map((s) => ({ ...s })),
     }])),
   });
+  const PAGE = 12;   // การ์ดที่แสดงต่อครั้ง กด "แสดงเพิ่ม" ได้
+  const savedView = (() => { try { return localStorage.getItem("screener-view"); } catch (e) { return null; } })();
   const state = {
     source: SOURCES[0],
     presetId: PRESETS.presets[0].id,
     showFailed: false,
     search: "",
     sort: { key: "score", dir: -1 },
+    view: savedView === "table" ? "table" : "cards",
+    limit: PAGE,
     ...fresh(),
   };
   let charts = [];
@@ -161,7 +165,7 @@
       if (e.type !== "change") return;
       state[e.target.id === "ex-special" ? "exSpecial" : "exProfit"] = e.target.checked;
       renderPanel();
-      return renderTable();
+      return renderResults();
     }
     const ctl = e.target.closest(".ctl");
     if (!ctl || !ctl.dataset.id) return;
@@ -169,7 +173,7 @@
     if (role === "on") {
       cur().gates[+id.slice(1)].on = e.target.checked;
       ctl.classList.toggle("off", !e.target.checked);
-      return renderTable();
+      return renderResults();
     }
     const v = parseFloat(e.target.value);
     if (Number.isNaN(v)) return;
@@ -183,7 +187,7 @@
       if (e.type === "change") renderWeights();
       else updateWeightLabels();
     }
-    renderTable();
+    renderResults();
   }
 
   function updateWeightLabels() {
@@ -204,8 +208,85 @@
     return keys;
   }
 
-  function renderTable() {
-    const { base, passed, rows } = screen();
+  // ---------- ผลลัพธ์: การ์ด (ค่าตั้งต้น) หรือ ตาราง ----------
+  const sortLabel = (k) => k === "score" ? "คะแนน" : k === "t" ? "ชื่อย่อ" : label(k);
+
+  function renderResults() {
+    const res = screen();
+    const { base, passed, rows } = res;
+    const keys = ["score", "t", ...columns()];
+    if (!keys.includes(state.sort.key)) state.sort = { key: "score", dir: -1 };
+    $("sort").innerHTML = keys.map((k) => `<option value="${k}"${k === state.sort.key ? " selected" : ""}>${esc(sortLabel(k))}</option>`).join("");
+    const cards = state.view === "cards";
+    document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === state.view));
+    placeThumbs();
+    $("cards").hidden = !cards;
+    $("table-wrap").hidden = cards;
+    if (cards) renderCards(rows); else renderTable(rows);
+    const n = cards ? Math.min(state.limit, rows.length) : rows.length;
+    $("more").hidden = !cards || n >= rows.length;
+    $("more").textContent = `แสดงเพิ่มอีก ${Math.min(PAGE, rows.length - n)} ตัว`;
+    $("shown-count").textContent = rows.length ? `แสดง ${n} จาก ${rows.length} ตัว` : "";
+    const mode = isDiv() ? (state.exSpecial ? " · ไม่นับปันผลพิเศษ" : "") : (state.exProfit ? " · ใช้กำไรปกติ" : "");
+    $("summary").innerHTML = `<strong>ผ่านเกณฑ์ ${passed} ตัว</strong> · เรียงตาม${esc(sortLabel(state.sort.key))}
+      <span class="sub-sum">จาก ${base} ตัวที่ market cap ≥ ${fmt(state.minMcap, "ลบ.")} ลบ. · ${esc(presetDef().name)}${mode}</span>`;
+    $("as-of").textContent = `${ds().meta.label} · ราคาปิด ${ds().meta.price_date}`;
+  }
+
+  // กราฟเส้นเล็กของกำไร (ใช้กำไรปกติเมื่อเปิดสวิตช์) · สีม่วงเมื่อกำไรงวดล่าสุดสูงกว่างวดแรก ไม่งั้นสีเทา
+  function spark(s) {
+    const coreNp = core("np_last");
+    const ys = coreNp ? s.h.npc : s.h.np;
+    const pts = ys.map((y, i) => [i, y]).filter((p) => p[1] !== null && p[1] !== undefined);
+    if (pts.length < 2) return { svg: '<div class="spark-empty">ข้อมูลกำไรย้อนหลังไม่พอวาดกราฟ</div>', growth: "" };
+    const W = 300, H = 64, pad = 6;
+    const vals = pts.map((p) => p[1]), lo = Math.min(...vals), hi = Math.max(...vals);
+    const first = pts[0][0], span = pts[pts.length - 1][0] - first;   // วาดเต็มความกว้างตั้งแต่งวดแรกที่มีข้อมูล
+    const x = (i) => ((i - first) / span) * W;
+    const y = (v) => hi === lo ? H / 2 : pad + (1 - (v - lo) / (hi - lo)) * (H - pad * 2);
+    const line = pts.map((p, j) => `${j ? "L" : "M"}${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join("");
+    const area = `${line}L${x(pts[pts.length - 1][0]).toFixed(1)},${H}L${x(pts[0][0]).toFixed(1)},${H}Z`;
+    const [i0, v0] = pts[0], [i1, v1] = pts[pts.length - 1];
+    const up = v1 > v0;
+    const id = "sg-" + s.t.replace(/[^A-Za-z0-9]/g, "_");
+    const what = coreNp ? "กำไรปกติ" : "กำไรสุทธิ";
+    const svg = `<svg class="spark ${up ? "up" : "flat"}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img"
+        aria-label="${what} ${esc(s.h.p[i0])} ถึง ${esc(s.h.p[i1])}: ${fmt(v0, "ลบ.")} → ${fmt(v1, "ลบ.")} ล้านบาท">
+        <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".22"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+        <path d="${area}" fill="url(#${id})"/><path d="${line}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/></svg>
+      <p class="spark-cap">${what} ${esc(s.h.p[i0])} – ${esc(s.h.p[i1])}</p>`;
+    // เปลี่ยนแปลงของกำไรช่วงเดียวกับกราฟ (คิดเมื่อทั้งสองงวดเป็นบวก)
+    const growth = v0 > 0 && v1 > 0
+      ? `<span class="growth ${up ? "pos" : "neg"}" title="${what} ${esc(s.h.p[i1])} เทียบ ${esc(s.h.p[i0])}">${up ? "+" : "−"}${Math.round(Math.abs((v1 / v0 - 1) * 100)).toLocaleString("th-TH")}% <small>กำไร ${i1 - i0} ปี</small></span>`
+      : "";
+    return { svg, growth };
+  }
+
+  // ชื่อบนการ์ดตัดคำว่า Public Company Limited ออก ให้อ่านง่าย (ชื่อเต็มอยู่ใน tooltip และแผงรายตัว)
+  const shortName = (n) => n.replace(/\s+(Public\s+)?(Company|Co\.?),?\s+(Limited|Ltd\.?)\.?$/i, "").replace(/\s+(PCL|plc)\.?$/i, "");
+
+  function renderCards(rows) {
+    const keys = cur().weights.map((w) => eff(w.metric)).slice(0, 3);
+    $("cards").innerHTML = rows.slice(0, state.limit).map((r, idx) => {
+      const s = r.s, ok = !r.fails.length;
+      const tip = ok ? r.parts.map((p) => `${label(p.metric)}: ${Math.round(p.pct)} × ${Math.round(p.w * 100)}%`).join("\n") : r.fails.join("\n");
+      const badge = ok
+        ? `<span class="badge${r.score >= 70 ? " hi" : ""}" title="${esc(tip)}">#${r.rank} · ${r.score.toFixed(0)} คะแนน</span>`
+        : `<span class="badge bad" title="${esc(tip)}">ไม่ผ่าน</span>`;
+      const sp = spark(s);
+      const fails = ok ? "" : `<div class="fails">${r.fails.slice(0, 2).map((f) => `<span class="chip">✕ ${esc(f)}</span>`).join("")}${r.fails.length > 2 ? `<span class="chip">+${r.fails.length - 2}</span>` : ""}</div>`;
+      return `<article class="card${ok ? "" : " failed"}" data-detail="${esc(s.t)}" tabindex="0" style="--i:${idx % PAGE}" aria-label="${esc(s.t)} ${esc(s.n)}">
+        <header><h3>${esc(s.t)}</h3>${badge}</header>
+        <p class="cname" title="${esc(s.n)}">${esc(shortName(s.n))}${s.fin ? ' <span class="chip fin">การเงิน</span>' : ""}${specialChip(s)}</p>
+        <div class="price">${numBtn(s, "price")}<span class="unit">บาท</span>${sp.growth}</div>
+        ${sp.svg}
+        <div class="kpis">${keys.map((k) => `<div><small title="${esc(defs()[k].formula)}">${esc(label(k))}</small>${numBtn(s, k)}</div>`).join("")}</div>
+        ${fails}
+      </article>`;
+    }).join("") || `<p class="empty">ไม่มีหุ้นที่ผ่านเกณฑ์ — ลองผ่อนเกณฑ์หรือเปิด "แสดงตัวที่ไม่ผ่าน"</p>`;
+  }
+
+  function renderTable(rows) {
     const cols = columns();
     const sortAttr = (k) => state.sort.key === k ? ` aria-sort="${state.sort.dir > 0 ? "ascending" : "descending"}"` : "";
     let html = `<thead><tr>
@@ -228,8 +309,6 @@
     }
     if (!rows.length) html += `<tr><td class="l" colspan="${cols.length + 5}">ไม่มีหุ้นที่ผ่านเกณฑ์ — ลองผ่อนเกณฑ์หรือเปิด "แสดงตัวที่ไม่ผ่าน"</td></tr>`;
     $("table").innerHTML = html + "</tbody>";
-    const mode = isDiv() ? (state.exSpecial ? " · ไม่นับปันผลพิเศษ" : "") : (state.exProfit ? " · ใช้กำไรปกติ" : "");
-    $("summary").innerHTML = `ผ่าน <strong>${passed}</strong> จาก ${base} ตัว (market cap ≥ ${fmt(state.minMcap, "ลบ.")} ลบ.) · ${esc(presetDef().name)} · ${esc(ds().meta.label)}${mode}`;
   }
 
   // ป้ายข้างชื่อหุ้น: แท็บปันผล = ปันผลพิเศษ · แท็บอื่น = กำไร/ขาดทุนพิเศษตั้งแต่ 10% ของกำไรสุทธิ
@@ -422,7 +501,7 @@
   function renderAll() {
     renderHeader();
     renderPanel();
-    renderTable();
+    renderResults();
   }
 
   // ---------- เหตุการณ์ ----------
@@ -438,12 +517,19 @@
       return;
     }
     const tab = e.target.closest("[data-preset]");
-    if (tab) { state.presetId = tab.dataset.preset; state.sort = { key: "score", dir: -1 }; return renderAll(); }
+    if (tab) { state.presetId = tab.dataset.preset; state.sort = { key: "score", dir: -1 }; state.limit = PAGE; return renderAll(); }
+    const view = e.target.closest("[data-view]");
+    if (view) {
+      state.view = view.dataset.view;
+      try { localStorage.setItem("screener-view", state.view); } catch (err) { /* โหมดส่วนตัว */ }
+      return renderResults();
+    }
+    if (e.target.id === "more") { state.limit += PAGE; return renderResults(); }
     const th = e.target.closest("th[data-sort]");
     if (th && th.closest("#table")) {
       const k = th.dataset.sort;
       state.sort = state.sort.key === k ? { key: k, dir: -state.sort.dir } : { key: k, dir: k === "t" ? 1 : -1 };
-      return renderTable();
+      return renderResults();
     }
     const num = e.target.closest("[data-src]");
     if (num) { e.stopPropagation(); return showPopover(num); }
@@ -453,11 +539,21 @@
   });
   $("panel").addEventListener("input", onPanelInput);
   $("panel").addEventListener("change", onPanelInput);
-  $("show-failed").addEventListener("change", (e) => { state.showFailed = e.target.checked; renderTable(); });
-  $("search").addEventListener("input", (e) => { state.search = e.target.value; renderTable(); });
-  $("reset").addEventListener("click", () => { Object.assign(state, fresh()); renderPanel(); renderTable(); });
+  $("show-failed").addEventListener("change", (e) => { state.showFailed = e.target.checked; renderResults(); });
+  $("search").addEventListener("input", (e) => { state.search = e.target.value; state.limit = PAGE; renderResults(); });
+  $("sort").addEventListener("change", (e) => {
+    const k = e.target.value;
+    state.sort = { key: k, dir: k === "t" ? 1 : -1 };
+    renderResults();
+  });
+  $("reset").addEventListener("click", () => { Object.assign(state, fresh()); renderPanel(); renderResults(); });
   $("detail-close").addEventListener("click", closeDetail);
   document.addEventListener("keydown", (e) => {
+    // การ์ดกด Enter/เว้นวรรค เปิดรายละเอียดได้เหมือนคลิก
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches("article[data-detail]")) {
+      e.preventDefault();
+      return openDetail(e.target.dataset.detail);
+    }
     if (e.key !== "Escape") return;
     if (!$("popover").hidden) $("popover").hidden = true;
     else if (!$("detail").hidden) closeDetail();
@@ -474,6 +570,6 @@
   renderAll();
   renderTheme();
   if (qs.get("t")) openDetail(qs.get("t").toUpperCase());
-  // จอแคบ: หุบแผงเกณฑ์ไว้ก่อน ให้ตารางขึ้นมาให้เห็นทันที
+  // จอแคบ: หุบแผงเกณฑ์ไว้ก่อน ให้ผลลัพธ์ขึ้นมาให้เห็นทันที
   if (matchMedia("(max-width: 860px)").matches) document.querySelector("#panel details").open = false;
 })();

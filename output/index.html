@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thai Stock Screener</title>
-<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#eef0fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0b14" media="(prefers-color-scheme: dark)">
 <meta name="description" content="คัดหุ้นไทย 4 มุมมอง: คุณภาพราคาเหมาะสม · ปันผลยั่งยืน · หุ้นถูก · หุ้นเติบโต">
 <link rel="icon" href="data:,">
 <script>
@@ -15,11 +15,11 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top glass">
+<header class="top">
   <div class="title-row">
     <div>
-      <p class="eyebrow">AI Investor Alpha · หุ้นไทย 4 มุมมอง</p>
       <h1>Thai Stock Screener</h1>
+      <p class="subtitle">หุ้นไทย 4 มุมมอง · คัดผ่าน/ไม่ผ่านแล้วเรียงคะแนน · AI Investor Alpha</p>
     </div>
     <div class="controls">
       <div class="seg source" role="group" aria-label="แหล่งข้อมูล">
@@ -41,7 +41,7 @@
 </header>
 
 <main class="layout">
-  <aside class="panel glass" id="panel">
+  <aside class="panel" id="panel">
     <details open>
       <summary>เกณฑ์และน้ำหนัก</summary>
       <section>
@@ -62,14 +62,25 @@
 
   <section class="results">
     <div class="toolbar">
-      <p id="summary" aria-live="polite"></p>
-      <label class="search"><span class="sr">ค้นหา</span><input type="search" id="search" placeholder="ค้นหา ticker หรือชื่อ"></label>
+      <label class="search"><span class="sr">ค้นหา</span><input type="search" id="search" placeholder="ค้นหาหุ้น"></label>
+      <label class="sort"><span>เรียงตาม</span><select id="sort"></select></label>
       <label class="toggle"><input type="checkbox" id="show-failed"> แสดงตัวที่ไม่ผ่าน</label>
+      <div class="seg view" role="group" aria-label="รูปแบบผลลัพธ์">
+        <span class="seg-thumb" aria-hidden="true"></span>
+        <button type="button" data-view="cards">การ์ด</button>
+        <button type="button" data-view="table">ตาราง</button>
+      </div>
     </div>
-    <div class="table-wrap" id="table-wrap">
+    <div class="result-head">
+      <p id="summary" aria-live="polite"></p>
+      <p id="as-of"></p>
+    </div>
+    <div class="cards" id="cards"></div>
+    <div class="table-wrap" id="table-wrap" hidden>
       <table id="table"></table>
     </div>
-    <p class="hint">กดตัวเลขเพื่อดูที่มา · กดชื่อหุ้นเพื่อดูรายละเอียดและกราฟย้อนหลัง · กดหัวคอลัมน์เพื่อเรียง</p>
+    <div class="more-row"><button type="button" class="more" id="more" hidden></button><p id="shown-count"></p></div>
+    <p class="hint">กดตัวเลขเพื่อดูที่มา · กดการ์ดหรือชื่อหุ้นเพื่อดูรายละเอียดและกราฟย้อนหลัง</p>
   </section>
 </main>
 
