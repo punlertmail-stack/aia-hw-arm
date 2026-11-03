@@ -11,7 +11,7 @@ import read_yahoo
 
 def period(label, np, equity, prev, revenue=1000.0, div_paid=50.0, fcf=80.0, cfo=120.0):
     return {"label": label, "np": np, "equity": equity, "equity_prev": prev, "revenue": revenue,
-            "gross_profit": revenue * 0.3, "normalized_np": np, "equity_total": equity,
+            "gross_profit": revenue * 0.3, "np_special": 0.0, "equity_total": equity,
             "ib_debt": equity * 0.5, "cur_assets": 300.0, "cur_liab": 200.0,
             "cfo": cfo, "fcf": fcf, "div_paid": div_paid}
 
@@ -172,6 +172,42 @@ class TestSpecialDividend(unittest.TestCase):
         m = {"dy": 4.0, "dy_ex": 2.5}
         self.assertTrue(metrics.passes(m, False, preset))
         self.assertFalse(metrics.passes(m, False, preset, {"dy": "dy_ex"}))
+
+
+class TestSpecialProfit(unittest.TestCase):
+    def test_core_metrics_use_profit_minus_special(self):
+        ps = [period(f"FY{2022 + i}", np=100.0, equity=1000.0, prev=1000.0) for i in range(4)]
+        ps[-1]["np"], ps[-1]["np_special"] = 150.0, 50.0       # ปีล่าสุดมีกำไรพิเศษ 50
+        m, c = metrics.compute(record(ps, mcap=1500.0)), metrics.compute_core(record(ps, mcap=1500.0))
+        self.assertAlmostEqual(m["pe"], 10.0)
+        self.assertAlmostEqual(c["pe"], 15.0)                   # 1500 ÷ (150 − 50)
+        self.assertAlmostEqual(c["roe_last"], 10.0)
+        self.assertAlmostEqual(c["np_cagr3"], 0.0)              # กำไรปกติไม่ได้โต
+        self.assertGreater(m["np_cagr3"], 14)
+        self.assertAlmostEqual(m["norm_gap"], 33.33)
+        self.assertEqual(set(c), set(metrics.CORE_KEYS))
+
+    def test_passes_with_core(self):
+        preset = {"gates": [{"metric": "pe", "op": "<=", "value": 12}]}
+        self.assertTrue(metrics.passes({"pe": 10.0}, False, preset))
+        self.assertFalse(metrics.passes({"pe": 10.0}, False, preset, None, {"pe": 15.0}))
+
+    def test_yahoo_unusual_items_after_tax(self):
+        d = {"ticker": "T", "price_pin_date": "2026-10-30",
+             "info": {"sharesOutstanding": 1e6, "longName": "T", "sector": ""},
+             "prices": [{"date": "2026-10-30", "close": 10.0}], "dividends": [],
+             "income_stmt": {"2025-12-31": {"Net Income Common Stockholders": 50e6, "Total Unusual Items": 20e6,
+                                            "Tax Effect Of Unusual Items": 4e6}},
+             "balance_sheet": {"2025-12-31": {"Stockholders Equity": 500e6}}, "cashflow": {}}
+        self.assertAlmostEqual(read_yahoo.to_record(d)["periods"][-1]["np_special"], 16.0)
+
+    def test_setsmart_other_income_spike(self):
+        # รายได้อื่นปกติ 10 ต่อไตรมาส · ไตรมาสล่าสุดพุ่งเป็น 110 (ส่วนเกิน 100) กำไรไตรมาสนั้น 150
+        byq = {q: {"other_income": "10", "net_profit_parent": "50"} for q in range(100, 112)}
+        byq[111] = {"other_income": "110", "net_profit_parent": "150"}
+        self.assertAlmostEqual(read_setsmart.special_profit(byq, 111), 80.0)   # 100 × (1 − 20%)
+        byq[111] = {"other_income": "25", "net_profit_parent": "150"}           # 2.5 เท่า → ไม่นับ
+        self.assertEqual(read_setsmart.special_profit(byq, 111), 0.0)
 
 
 if __name__ == "__main__":

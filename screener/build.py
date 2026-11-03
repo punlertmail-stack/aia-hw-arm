@@ -25,6 +25,16 @@ OUT = ROOT / "output" / "data"
 DPS_YEARS = 6
 ICT = timezone(timedelta(hours=7))
 
+# คำอธิบายใต้สวิตช์ "ไม่นับกำไรพิเศษ" — นิยามต่างกันตามแหล่งข้อมูล
+SPECIAL_PROFIT_NOTE = {
+    "yahoo": "กำไรพิเศษ = รายการที่ Yahoo Finance จัดเป็น Unusual Items หลังหักภาษี เช่น กำไร/ขาดทุนจากการขายเงินลงทุน "
+             "การขายสินทรัพย์หรือธุรกิจ การด้อยค่าสินทรัพย์และค่าความนิยม ค่าใช้จ่ายปรับโครงสร้าง · "
+             "ไม่รวมกำไร/ขาดทุนจากอัตราแลกเปลี่ยน เพราะ Yahoo ไม่ได้แยกไว้",
+    "setsmart": "กำไรพิเศษ = รายได้อื่นในไตรมาสที่สูงผิดปกติ (≥ 3 เท่าของมัธยฐาน 8 ไตรมาสก่อน และส่วนเกิน ≥ 50% "
+                "ของกำไรไตรมาสนั้น) นับเฉพาะส่วนที่เกินปกติ หักภาษี 20% · มักเป็นกำไรจากการขายเงินลงทุนหรือสินทรัพย์ "
+                "หรือกำไรจากอัตราแลกเปลี่ยนที่บันทึกในรายได้อื่น · รายการพิเศษที่ไม่ได้ผ่านรายได้อื่นจะจับไม่ได้",
+}
+
 
 def stock_row(rec):
     dps = {y: rec["dps"][y] for y in sorted(rec["dps"])[-DPS_YEARS:]}
@@ -36,6 +46,7 @@ def stock_row(rec):
         "fin": rec["fin"],
         "per": rec["periods"][-1]["label"],
         "m": metrics.compute(rec),
+        "mc": metrics.compute_core(rec),
         "h": metrics.history(rec),
         "dps": dps,
         "dpss": dpss,
@@ -54,14 +65,21 @@ def write_js(name, meta, recs):
 
 def summarize(name, payload, presets):
     stocks = [s for s in payload["stocks"] if (s["m"]["mcap"] or 0) >= presets["universe"]["min_mcap"]]
-    sd = presets["special_dividend"]
-    on, off = (sd["alt"], None) if sd["exclude"] else (None, sd["alt"])
-    counts = {p["id"]: sum(metrics.passes(s["m"], s["fin"], p, on) for s in stocks) for p in presets["presets"]}
-    other = {p["id"]: sum(metrics.passes(s["m"], s["fin"], p, off) for s in stocks) for p in presets["presets"]}
-    flagged = sum(1 for s in stocks if s["m"]["sp_share"])
+    sd, sp = presets["special_dividend"], presets["special_profit"]
+
+    def count(p, ex_div, ex_profit):
+        # แท็บปันผลมีแค่สวิตช์ปันผลพิเศษ · แท็บอื่นมีแค่สวิตช์กำไรพิเศษ (ตรงกับ app.js)
+        if p["id"] == "dividend":
+            return sum(metrics.passes(s["m"], s["fin"], p, sd["alt"] if ex_div else None) for s in stocks)
+        return sum(metrics.passes(s["m"], s["fin"], p, None, s["mc"] if ex_profit else None) for s in stocks)
+
+    default = {p["id"]: count(p, sd["exclude"], sp["exclude"]) for p in presets["presets"]}
+    flipped = {p["id"]: count(p, not sd["exclude"], not sp["exclude"]) for p in presets["presets"]}
+    div_flag = sum(1 for s in stocks if s["m"]["sp_share"])
+    np_flag = sum(1 for s in stocks if abs(s["m"]["norm_gap"] or 0) >= 10)
     size = (OUT / f"{name}.js").stat().st_size / 1e6
-    print(f"{name}: {len(payload['stocks'])} ตัว · ฐานคัด {len(stocks)} ตัว · ผ่าน (ค่าตั้งต้น) {counts} · {size:.2f} MB\n"
-          f"  ถ้า{'นับ' if sd['exclude'] else 'ไม่นับ'}ปันผลพิเศษ: ผ่าน {other} · มีปันผลพิเศษในช่วงล่าสุด {flagged} ตัว")
+    print(f"{name}: {len(payload['stocks'])} ตัว · ฐานคัด {len(stocks)} ตัว · ผ่าน (ค่าตั้งต้น) {default} · {size:.2f} MB\n"
+          f"  ถ้าสลับสวิตช์ทั้งสอง: ผ่าน {flipped} · มีปันผลพิเศษ {div_flag} ตัว · กำไรพิเศษ ≥ 10% ของกำไร {np_flag} ตัว")
 
 
 def main():
@@ -88,6 +106,7 @@ def main():
         "period_note": f"งบรายปี ส่วนใหญ่ล่าสุด {last_fy}",
         "price_date": price_date, "fetched": fetched, "built": built,
         "url": read_yahoo.URL, "fields": read_yahoo.field_sources(), "metrics": metrics.METRICS,
+        "core_keys": metrics.CORE_KEYS, "special_profit_note": SPECIAL_PROFIT_NOTE["yahoo"],
     }
     payload, _ = write_js("yahoo", meta, yahoo)
     summarize("yahoo", payload, presets)
@@ -107,6 +126,7 @@ def main():
         "price_date": price_date, "fetched": fetched, "built": built,
         "url": None, "file_note": "SETSMART fundamentals 2021Q1–2026Q2 (ไฟล์อยู่ในเครื่องผู้เรียน ไม่ขึ้น GitHub)",
         "fields": read_setsmart.field_sources(), "metrics": metrics.METRICS,
+        "core_keys": metrics.CORE_KEYS, "special_profit_note": SPECIAL_PROFIT_NOTE["setsmart"],
     }
     payload, _ = write_js("setsmart", meta, recs)
     summarize("setsmart", payload, presets)

@@ -17,6 +17,7 @@
   const fresh = () => ({
     minMcap: PRESETS.universe.min_mcap,
     exSpecial: !!(PRESETS.special_dividend || {}).exclude,
+    exProfit: !!(PRESETS.special_profit || {}).exclude,
     presets: Object.fromEntries(PRESETS.presets.map((p) => [p.id, {
       gates: p.gates.map((g) => ({ ...g, on: true })),
       weights: p.score.map((s) => ({ ...s })),
@@ -37,7 +38,12 @@
   const presetDef = () => PRESETS.presets.find((p) => p.id === state.presetId);
   const cur = () => state.presets[state.presetId];
   // ตัวชี้วัดที่ใช้จริง: เปิด "ไม่นับปันผลพิเศษ" แล้ว dy → dy_ex, payout → payout_ex
-  const eff = (k) => (state.exSpecial && ALT[k]) || k;
+  // แท็บปันผลมีสวิตช์ "ไม่นับปันผลพิเศษ" อย่างเดียว · แท็บอื่นมีสวิตช์ "ไม่นับกำไรพิเศษ" อย่างเดียว
+  const isDiv = () => state.presetId === "dividend";
+  const eff = (k) => (isDiv() && state.exSpecial && ALT[k]) || k;
+  // เปิด "ไม่นับกำไรพิเศษ" แล้ว ตัวชี้วัดที่ใช้กำไรอ่านจากชุดกำไรปกติ (s.mc) แทน
+  const core = (k) => !isDiv() && state.exProfit && (ds().meta.core_keys || []).includes(k);
+  const mv = (s, k) => (core(k) && s.mc ? s.mc[k] : s.m[k]);
 
   // ---------- ตัวเลข ----------
   function fmt(v, unit) {
@@ -45,7 +51,7 @@
     const nd = unit === "ลบ." ? 0 : unit === "ปี" ? 0 : Math.abs(v) >= 100 ? 1 : 2;
     return v.toLocaleString("th-TH", { minimumFractionDigits: nd, maximumFractionDigits: nd });
   }
-  const label = (k) => defs()[k].label;
+  const label = (k) => defs()[k].label + (core(k) ? " · กำไรปกติ" : "");
   const unit = (k) => defs()[k].unit;
   const withUnit = (k, v) => fmt(v, unit(k)) + (unit(k) === "%" ? "%" : "");
 
@@ -54,7 +60,7 @@
     const fails = [];
     for (const g of gates) {
       if (!g.on || (stock.fin && g.skip_fin)) continue;
-      const k = eff(g.metric), v = stock.m[k];
+      const k = eff(g.metric), v = mv(stock, k);
       if (v === null || v === undefined) fails.push(`ข้อมูลไม่พอ: ${label(k)}`);
       else if (!OPS[g.op](v, g.value)) fails.push(`${label(k)} ${withUnit(k, v)} (เกณฑ์ ${OP_TEXT[g.op]} ${fmt(g.value, unit(k))})`);
     }
@@ -63,11 +69,11 @@
 
   // percentile 0–100 ภายในกลุ่มที่ผ่าน ค่าเท่ากันได้อันดับเฉลี่ย · ไม่มีค่า = 0
   function percentiles(rows, metric, better) {
-    const vals = rows.map((r) => r.s.m[metric]).filter((v) => v !== null && v !== undefined);
+    const vals = rows.map((r) => mv(r.s, metric)).filter((v) => v !== null && v !== undefined);
     const sorted = [...vals].sort((a, b) => a - b);
     const n = sorted.length;
     return rows.map((r) => {
-      const v = r.s.m[metric];
+      const v = mv(r.s, metric);
       if (v === null || v === undefined || n === 0) return 0;
       if (n === 1) return 100;
       let lo = 0, hi = 0;
@@ -98,7 +104,7 @@
   function sortRows(rows) {
     const { key, dir } = state.sort;
     const val = (r) => key === "score" ? (r.score ?? -Infinity)
-      : key === "t" ? r.s.t : (r.s.m[key] ?? null);
+      : key === "t" ? r.s.t : (mv(r.s, key) ?? null);
     return rows.sort((a, b) => {
       if (!a.fails.length !== !b.fails.length) return a.fails.length ? 1 : -1;  // ตัวที่ผ่านอยู่บนเสมอ
       const x = val(a), y = val(b);
@@ -127,8 +133,11 @@
   function renderPanel() {
     $("universe").innerHTML = rangeCtl("mcap", "Market cap ขั้นต่ำ", state.minMcap, 0, 20000, 500,
       { suffix: " ลบ.", aria: "Market cap ขั้นต่ำ" })
-      + `<div class="ctl"><label class="ctl-head"><input type="checkbox" id="ex-special" ${state.exSpecial ? "checked" : ""}> ไม่นับปันผลพิเศษ</label>
-         <div class="note">ใช้ yield และ payout ที่หักส่วนเกินของงวดที่ DPS ≥ 3 เท่าของปกติออก (กฎเดียวกับ dashboard Day 1)</div></div>`;
+      + (isDiv()
+        ? `<div class="ctl"><label class="ctl-head"><input type="checkbox" id="ex-special" ${state.exSpecial ? "checked" : ""}> ไม่นับปันผลพิเศษ</label>
+           <div class="note">ปันผลพิเศษ = ส่วนที่เกินปกติของงวดที่ DPS ≥ 3 เท่าของมัธยฐานงวดก่อนหน้า และ ≥ 1% ของราคาวัน XD (กฎเดียวกับ dashboard Day 1) · เปิดแล้ว yield และ payout จะหักส่วนนี้ออก</div></div>`
+        : `<div class="ctl"><label class="ctl-head"><input type="checkbox" id="ex-profit" ${state.exProfit ? "checked" : ""}> ไม่นับกำไรพิเศษ</label>
+           <div class="note">${esc(ds().meta.special_profit_note || "")} · เปิดแล้ว P/E, ROE, CAGR กำไร, PEG ฯลฯ จะใช้กำไรปกติ = กำไรสุทธิ − กำไรพิเศษ</div></div>`);
     $("gates").innerHTML = cur().gates.map((g, i) => {
       const k = eff(g.metric), u = unit(k);
       return rangeCtl("g" + i, esc(label(k)), g.value, g.min, g.max, g.step, {
@@ -148,9 +157,9 @@
   }
 
   function onPanelInput(e) {
-    if (e.target.id === "ex-special") {
+    if (e.target.id === "ex-special" || e.target.id === "ex-profit") {
       if (e.type !== "change") return;
-      state.exSpecial = e.target.checked;
+      state[e.target.id === "ex-special" ? "exSpecial" : "exProfit"] = e.target.checked;
       renderPanel();
       return renderTable();
     }
@@ -190,7 +199,7 @@
     const keys = [];
     for (const g of cur().gates) if (!keys.includes(eff(g.metric))) keys.push(eff(g.metric));
     for (const w of cur().weights) if (!keys.includes(eff(w.metric))) keys.push(eff(w.metric));
-    if (state.presetId === "dividend") keys.push("sp_share");
+    keys.push(isDiv() ? "sp_share" : "norm_gap");
     keys.push("mcap");
     return keys;
   }
@@ -210,7 +219,7 @@
       const tip = ok ? r.parts.map((p) => `${label(p.metric)}: ${Math.round(p.pct)} × ${Math.round(p.w * 100)}%`).join("\n") : "";
       html += `<tr class="${ok ? "" : "failed"}">
         <td class="l">${ok ? r.rank : "–"}</td>
-        <td class="l sticky"><button type="button" class="tk" data-detail="${esc(s.t)}">${esc(s.t)}</button>${s.fin ? ' <span class="chip fin" title="ธนาคาร/การเงิน">การเงิน</span>' : ""}${s.m.sp_share ? ` <span class="chip warn" title="ปันผลพิเศษ ${fmt(s.m.sp_share)}% ของปันผลช่วงล่าสุด">พิเศษ</span>` : ""}</td>
+        <td class="l sticky"><button type="button" class="tk" data-detail="${esc(s.t)}">${esc(s.t)}</button>${s.fin ? ' <span class="chip fin" title="ธนาคาร/การเงิน">การเงิน</span>' : ""}${specialChip(s)}</td>
         <td class="l name" title="${esc(s.n)}">${esc(s.n)}</td>
         <td>${ok ? `<span class="score" title="${esc(tip)}"><span class="bar"><i style="width:${r.score.toFixed(0)}%"></i></span>${r.score.toFixed(0)}</span>` : '<span class="na">–</span>'}</td>
         ${cols.map((k) => `<td>${numBtn(s, k)}</td>`).join("")}
@@ -219,11 +228,22 @@
     }
     if (!rows.length) html += `<tr><td class="l" colspan="${cols.length + 5}">ไม่มีหุ้นที่ผ่านเกณฑ์ — ลองผ่อนเกณฑ์หรือเปิด "แสดงตัวที่ไม่ผ่าน"</td></tr>`;
     $("table").innerHTML = html + "</tbody>";
-    $("summary").innerHTML = `ผ่าน <strong>${passed}</strong> จาก ${base} ตัว (market cap ≥ ${fmt(state.minMcap, "ลบ.")} ลบ.) · ${esc(presetDef().name)} · ${esc(ds().meta.label)}`;
+    const mode = isDiv() ? (state.exSpecial ? " · ไม่นับปันผลพิเศษ" : "") : (state.exProfit ? " · ใช้กำไรปกติ" : "");
+    $("summary").innerHTML = `ผ่าน <strong>${passed}</strong> จาก ${base} ตัว (market cap ≥ ${fmt(state.minMcap, "ลบ.")} ลบ.) · ${esc(presetDef().name)} · ${esc(ds().meta.label)}${mode}`;
+  }
+
+  // ป้ายข้างชื่อหุ้น: แท็บปันผล = ปันผลพิเศษ · แท็บอื่น = กำไร/ขาดทุนพิเศษตั้งแต่ 10% ของกำไรสุทธิ
+  function specialChip(s) {
+    if (isDiv()) {
+      return s.m.sp_share ? ` <span class="chip warn" title="ปันผลพิเศษ ${fmt(s.m.sp_share)}% ของปันผลช่วงล่าสุด">พิเศษ</span>` : "";
+    }
+    const g = s.m.norm_gap;
+    if (g === null || g === undefined || Math.abs(g) < 10) return "";
+    return ` <span class="chip warn" title="${g > 0 ? "กำไร" : "ขาดทุน"}พิเศษ ${fmt(Math.abs(g))}% ของกำไรสุทธิช่วงล่าสุด">${g > 0 ? "กำไรพิเศษ" : "ขาดทุนพิเศษ"}</span>`;
   }
 
   function numBtn(s, k) {
-    const v = s.m[k];
+    const v = mv(s, k);
     if (v === null || v === undefined) return `<button type="button" class="num na" data-src="${esc(s.t)}|${k}" title="ไม่มีข้อมูล — กดดูเหตุผล">–</button>`;
     return `<button type="button" class="num" data-src="${esc(s.t)}|${k}">${withUnit(k, v)}</button>`;
   }
@@ -231,8 +251,9 @@
   // ---------- popover ที่มา ----------
   function sourceHtml(s, k) {
     const meta = ds().meta, d = defs()[k];
-    const v = s.m[k];
-    const items = [...new Set(d.inputs)].map((f) => {
+    const v = mv(s, k), isCore = core(k);
+    const inputs = isCore && d.inputs.includes("np") ? [...d.inputs, "np_special"] : d.inputs;
+    const items = [...new Set(inputs)].map((f) => {
       const src = meta.fields[f] || { name: f };
       const when = f === "price" ? `ราคาปิด ${meta.price_date}` : f === "shares" ? `ดึงเมื่อ ${meta.fetched}` : `${s.per}${src.how ? " · " + src.how : ""}`;
       const tpl = src.url || (meta.url && src.page ? meta.url.replace("{page}", src.page) : null);
@@ -242,8 +263,9 @@
     const where = meta.source === "yahoo"
       ? `Yahoo Finance · ดึงเมื่อ ${esc(meta.fetched)}`
       : esc(meta.file_note);
-    return `<h3>${esc(s.t)} · ${esc(d.label)} = ${v === null || v === undefined ? "ไม่มีข้อมูล" : esc(withUnit(k, v)) + (d.unit === "%" ? "" : " " + esc(d.unit))}</h3>
-      <p class="formula">${esc(d.formula)}</p>
+    const raw = s.m[k];
+    return `<h3>${esc(s.t)} · ${esc(label(k))} = ${v === null || v === undefined ? "ไม่มีข้อมูล" : esc(withUnit(k, v)) + (d.unit === "%" ? "" : " " + esc(d.unit))}</h3>
+      <p class="formula">${esc(d.formula)}${isCore ? ` · ใช้กำไรปกติ = กำไรสุทธิ − กำไรพิเศษหลังภาษี (ถ้ารวมกำไรพิเศษ = ${raw === null || raw === undefined ? "ไม่มีข้อมูล" : esc(withUnit(k, raw))})` : ""}</p>
       <ul>${items}</ul>
       <p class="muted">แหล่ง: ${where}${v === null || v === undefined ? " · คำนวณไม่ได้เพราะข้อมูลบางช่องว่าง หรือค่าติดลบ (ไม่เดาค่าแทน)" : ""}</p>`;
   }
@@ -264,12 +286,15 @@
     const s = ds().stocks.find((x) => x.t === t);
     if (!s) return;
     $("detail-title").textContent = `${s.t}`;
+    const here = state.presetId;
     const presetChips = PRESETS.presets.map((p) => {
+      state.presetId = p.id;   // ประเมินด้วยสวิตช์ของ preset นั้น (ปันผลพิเศษ / กำไรพิเศษ)
       const fails = evaluate(s, state.presets[p.id].gates);
+      state.presetId = here;
       return `<span class="chip ${fails.length ? "" : "ok"}" title="${esc(fails.join("\n"))}">${fails.length ? "✕" : "✓"} ${esc(p.name)}</span>`;
     }).join("");
-    const grid = Object.keys(defs()).map((k) => `<div><small>${esc(label(k))}</small>${numBtn(s, k)}${unit(k) !== "%" && s.m[k] != null ? ` <span class="na">${esc(unit(k))}</span>` : ""}</div>`).join("");
-    const h = s.h, years = Object.keys(s.dps);
+    const grid = Object.keys(defs()).map((k) => `<div><small>${esc(label(k))}</small>${numBtn(s, k)}${unit(k) !== "%" && mv(s, k) != null ? ` <span class="na">${esc(unit(k))}</span>` : ""}</div>`).join("");
+    const h = s.h, years = Object.keys(s.dps), coreNp = core("np_last");
     $("detail-body").innerHTML = `
       <p class="sub">${esc(s.n)}${s.sec ? " · " + esc(s.sec) : ""}${s.fin ? ' · <span class="chip fin">การเงิน</span>' : ""}<br>
         งวดล่าสุด ${esc(s.per)} · ${esc(ds().meta.label)}</p>
@@ -277,13 +302,13 @@
       <h3>ตัวชี้วัด (กดดูที่มา)</h3>
       <div class="metric-grid">${grid}</div>
       <h3>ย้อนหลัง</h3>
-      <p class="chart-title">รายได้และกำไรสุทธิ (ล้านบาท)</p><div class="chart"><canvas id="c-rev" role="img" aria-label="กราฟรายได้และกำไรสุทธิ"></canvas></div>
-      <p class="chart-title">ROE (%)</p><div class="chart"><canvas id="c-roe" role="img" aria-label="กราฟ ROE"></canvas></div>
+      <p class="chart-title">รายได้และ${coreNp ? "กำไรปกติ" : "กำไรสุทธิ"} (ล้านบาท)</p><div class="chart"><canvas id="c-rev" role="img" aria-label="กราฟรายได้และกำไร"></canvas></div>
+      <p class="chart-title">ROE${coreNp ? " จากกำไรปกติ" : ""} (%)</p><div class="chart"><canvas id="c-roe" role="img" aria-label="กราฟ ROE"></canvas></div>
       <p class="chart-title">ปันผลต่อหุ้นตามปีที่ขึ้น XD (บาท)</p><p class="chart-note">ที่มา: Yahoo dividends ทั้งสองโหมด · ส่วนพิเศษ = ส่วนที่เกินมัธยฐานของงวดที่ DPS ≥ 3 เท่าของปกติ</p><div class="chart"><canvas id="c-dps" role="img" aria-label="กราฟปันผลต่อหุ้น"></canvas></div>
       <p class="chart-title">FCF เทียบปันผลจ่าย (ล้านบาท)</p><div class="chart"><canvas id="c-fcf" role="img" aria-label="กราฟกระแสเงินสดอิสระเทียบปันผลจ่าย"></canvas></div>
       <details><summary>ดูเป็นตาราง</summary>
-        <table><thead><tr><th class="l">ช่วง</th><th>รายได้</th><th>กำไร</th><th>ROE %</th><th>FCF</th><th>ปันผลจ่าย</th></tr></thead>
-        <tbody>${h.p.map((p, i) => `<tr><td class="l">${esc(p)}</td><td>${fmt(h.rev[i], "ลบ.")}</td><td>${fmt(h.np[i], "ลบ.")}</td><td>${fmt(h.roe[i])}</td><td>${fmt(h.fcf[i], "ลบ.")}</td><td>${fmt(h.div[i], "ลบ.")}</td></tr>`).join("")}</tbody></table>
+        <table><thead><tr><th class="l">ช่วง</th><th>รายได้</th><th>กำไรสุทธิ</th><th>กำไรปกติ</th><th>ROE %</th><th>FCF</th><th>ปันผลจ่าย</th></tr></thead>
+        <tbody>${h.p.map((p, i) => `<tr><td class="l">${esc(p)}</td><td>${fmt(h.rev[i], "ลบ.")}</td><td>${fmt(h.np[i], "ลบ.")}</td><td>${fmt(h.npc[i], "ลบ.")}</td><td>${fmt((coreNp ? h.roec : h.roe)[i])}</td><td>${fmt(h.fcf[i], "ลบ.")}</td><td>${fmt(h.div[i], "ลบ.")}</td></tr>`).join("")}</tbody></table>
         <table><thead><tr><th class="l">ปี XD</th><th>DPS รวม (บาท)</th><th>ส่วนพิเศษ</th></tr></thead>
         <tbody>${years.map((y) => `<tr><td class="l">${esc(y)}</td><td>${fmt(s.dps[y])}</td><td>${s.dpss[y] ? fmt(s.dpss[y]) : "–"}</td></tr>`).join("")}</tbody></table>
       </details>`;
@@ -324,8 +349,9 @@
     });
     const bar = (label, data, color) => ({ label, data, backgroundColor: color, borderRadius: 4, borderSkipped: "start", maxBarThickness: 24, barPercentage: 0.8, categoryPercentage: 0.7 });
     const make = (id, cfg) => charts.push(new window.Chart($(id), cfg));
-    make("c-rev", { type: "bar", data: { labels: s.h.p, datasets: [bar("รายได้", s.h.rev, s1), bar("กำไรสุทธิ", s.h.np, s2)] }, options: base(true) });
-    make("c-roe", { type: "line", data: { labels: s.h.p, datasets: [{ label: "ROE %", data: s.h.roe, borderColor: s1, backgroundColor: s1, borderWidth: 2, pointRadius: 4, pointBorderColor: surface, pointBorderWidth: 2, spanGaps: false }] }, options: base(false) });
+    const coreNp = core("np_last");
+    make("c-rev", { type: "bar", data: { labels: s.h.p, datasets: [bar("รายได้", s.h.rev, s1), bar(coreNp ? "กำไรปกติ" : "กำไรสุทธิ", coreNp ? s.h.npc : s.h.np, s2)] }, options: base(true) });
+    make("c-roe", { type: "line", data: { labels: s.h.p, datasets: [{ label: "ROE %", data: coreNp ? s.h.roec : s.h.roe, borderColor: s1, backgroundColor: s1, borderWidth: 2, pointRadius: 4, pointBorderColor: surface, pointBorderWidth: 2, spanGaps: false }] }, options: base(false) });
     const years = Object.keys(s.dps), sp = (y) => s.dpss[y] || 0;
     const hasSp = years.some((y) => sp(y) > 0);
     const dpsOpts = base(hasSp);
@@ -345,8 +371,12 @@
     });
     const m = ds().meta;
     $("badges").innerHTML = `<span>งบ: ${esc(m.period_note)}</span><span>ราคาปิด ${esc(m.price_date)}</span><span>สร้างข้อมูล ${esc(m.built)}</span>`;
-    $("tabs").innerHTML = '<span class="seg-thumb" aria-hidden="true"></span>'
-      + PRESETS.presets.map((p) => `<button type="button" role="tab" data-preset="${p.id}" aria-selected="${p.id === state.presetId}">${esc(p.name)}</button>`).join("");
+    // สร้างปุ่มครั้งเดียว แล้วอัปเดตแค่สถานะ — แคปซูลจะได้เลื่อนจากแท็บเดิมไปแท็บใหม่ ไม่ใช่งอกใหม่ทุกครั้ง
+    if (!$("tabs").querySelector("[data-preset]")) {
+      $("tabs").innerHTML = '<span class="seg-thumb" aria-hidden="true"></span>'
+        + PRESETS.presets.map((p) => `<button type="button" role="tab" data-preset="${p.id}">${esc(p.name)}</button>`).join("");
+    }
+    $("tabs").querySelectorAll("[data-preset]").forEach((b) => b.setAttribute("aria-selected", b.dataset.preset === state.presetId));
     placeThumbs();
     $("preset-desc").textContent = presetDef().desc;
     $("foot-source").textContent = m.source === "yahoo"
@@ -360,8 +390,11 @@
       const on = seg.querySelector('[aria-pressed="true"], [aria-selected="true"]');
       const thumb = seg.querySelector(".seg-thumb");
       if (!on || !thumb) return;
+      const first = !thumb.style.width;   // วางครั้งแรกไม่ต้องมีแอนิเมชัน
+      if (first) thumb.style.transition = "none";
       thumb.style.width = on.offsetWidth + "px";
       thumb.style.transform = `translateX(${on.offsetLeft}px)`;
+      if (first) { void thumb.offsetWidth; thumb.style.transition = ""; }
     });
   }
   addEventListener("resize", placeThumbs);

@@ -10,6 +10,7 @@
 """
 from datetime import date
 import re
+import statistics
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -32,13 +33,20 @@ AT_END = {
 }
 SUM4 = {"gross_profit": "gross_profit"}  # ไม่มีคอลัมน์ TTM → รวม 4 ไตรมาสเอง
 
+# กำไรพิเศษ: SETSMART ไม่มีคอลัมน์รายการพิเศษ ใช้กฎรายได้อื่นผิดปกติแบบ dashboard Day 1 (SPECIAL_OI_X)
+OI_X = 3.0         # รายได้อื่นไตรมาสนั้น >= 3 เท่าของมัธยฐาน 8 ไตรมาสก่อนหน้า
+OI_SHARE = 0.5     # และส่วนเกินต้อง >= 50% ของกำไรไตรมาสนั้น (ไม่งั้นถือว่าไม่มีนัย)
+OI_MIN_HISTORY = 4
+TAX = 0.20         # ภาษีเงินได้นิติบุคคลไทย ใช้แปลงส่วนเกินเป็นกำไรหลังภาษี
+
 
 def field_sources():
     src = {k: {"name": " / ".join(v), "how": "TTM (4 ไตรมาส)"} for k, v in TTM.items()}
     src.update({k: {"name": " / ".join(v), "how": "ณ สิ้นงวด"} for k, v in AT_END.items()})
     src["gross_profit"] = {"name": "gross_profit", "how": "รวม 4 ไตรมาส"}
     src["equity_prev"] = {"name": "equity_parent", "how": "ณ สิ้นงวดเดียวกันปีก่อน"}
-    src["normalized_np"] = {"name": "(ไม่มีใน SETSMART)", "how": ""}
+    src["np_special"] = {"name": "other_income (ส่วนเกินของไตรมาสที่ผิดปกติ) × (1 − 20%)",
+                         "how": f"ไตรมาสที่รายได้อื่น ≥ {OI_X:g} เท่าของมัธยฐาน 8 ไตรมาสก่อนหน้า และส่วนเกิน ≥ {OI_SHARE:.0%} ของกำไรไตรมาสนั้น · รวม 4 ไตรมาสของช่วง"}
     yahoo = "https://finance.yahoo.com/quote/{t}.BK/"
     src["div_paid"] = {"name": "Yahoo dividends × sharesOutstanding", "url": yahoo + "history/",
                        "how": "ปันผลต่อหุ้นที่ XD ใน 12 เดือนของช่วง × จำนวนหุ้นปัจจุบัน (dividends_paid ของ SETSMART ว่าง 61% ของแถว)"}
@@ -127,6 +135,25 @@ def div_in_window(events, shares, end_q, special_only=False):
     return sum(sp if special_only else v for xd, v, sp in events if start < xd <= end) * shares / 1e6
 
 
+def special_profit(byq, end):
+    """กำไรพิเศษหลังภาษี (ล้านบาท) ในช่วง TTM ที่จบไตรมาส end — นับเฉพาะส่วนที่รายได้อื่นเกินมัธยฐาน"""
+    total = 0.0
+    for q in range(end - 3, end + 1):
+        r = byq.get(q)
+        oi, np_q = (num(r.get("other_income")), num(r.get("net_profit_parent"))) if r else (None, None)
+        if oi is None or np_q is None:
+            continue
+        hist = [num(byq[h].get("other_income")) for h in range(q - 8, q) if h in byq]
+        hist = [v for v in hist if v is not None]
+        if len(hist) < OI_MIN_HISTORY:
+            continue
+        base = statistics.median(hist)
+        excess = oi - base
+        if base > 0 and oi >= OI_X * base and excess >= OI_SHARE * abs(np_q):
+            total += excess * (1 - TAX)
+    return total
+
+
 def to_record(symbol, company, quarters, px):
     """quarters = แถวรายไตรมาสของหุ้นตัวนี้ · px = ข้อมูลจาก Yahoo (price, price_date, shares, name, sector, dps, div_events)"""
     byq = {qnum(r["period"]): r for r in quarters}
@@ -148,7 +175,7 @@ def to_record(symbol, company, quarters, px):
             p[f] = sum(q4) if all(v is not None for v in q4) else None
         prev = byq.get(end - 4)
         p["equity_prev"] = first(prev, AT_END["equity"]) if prev else None
-        p["normalized_np"] = None
+        p["np_special"] = special_profit(byq, end) if p["np"] is not None else None
         p["div_paid"] = div_in_window(px["div_events"], px["shares"], end)
         p["div_special"] = div_in_window(px["div_events"], px["shares"], end, special_only=True)
         periods.append(p)

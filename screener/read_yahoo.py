@@ -21,7 +21,8 @@ FIELDS = {
     "revenue":       ("income_stmt", ["Total Revenue"], "financials"),
     "np":            ("income_stmt", ["Net Income Common Stockholders"], "financials"),
     "gross_profit":  ("income_stmt", ["Gross Profit"], "financials"),
-    "normalized_np": ("income_stmt", ["Normalized Income"], "financials"),
+    "unusual":       ("income_stmt", ["Total Unusual Items"], "financials"),
+    "unusual_tax":   ("income_stmt", ["Tax Effect Of Unusual Items"], "financials"),
     "equity":        ("balance_sheet", ["Stockholders Equity"], "balance-sheet"),
     "equity_total":  ("balance_sheet", ["Total Equity Gross Minority Interest"], "balance-sheet"),
     "ib_debt":       ("balance_sheet", ["Total Debt"], "balance-sheet"),
@@ -40,6 +41,8 @@ def field_sources():
     src["price"] = {"name": "Close (ราคาปิด)", "page": "history"}
     src["shares"] = {"name": "sharesOutstanding", "page": "key-statistics"}
     src["equity_prev"] = src["equity"]
+    src["np_special"] = {"name": "Total Unusual Items − Tax Effect Of Unusual Items", "page": "financials",
+                         "how": "กำไรพิเศษหลังภาษี (ขายเงินลงทุน/สินทรัพย์ ด้อยค่า ฯลฯ ตามที่ Yahoo จัดประเภท) · ไม่รวมกำไรค่าเงิน"}
     src["div_special"] = {"name": "Yahoo dividends (ส่วนเกินของงวดที่ตีธงพิเศษ) × sharesOutstanding", "page": "history",
                           "how": f"งวดที่ DPS ≥ {SPECIAL_X:g} เท่าของมัธยฐานงวดก่อนหน้า และ ≥ {SPECIAL_MIN_PCT:g}% ของราคาวัน XD · นับเฉพาะส่วนที่เกินมัธยฐาน"}
     return src
@@ -121,6 +124,8 @@ def to_record(d):
             p["div_paid"] = dps[y[:4]] * shares / 1e6
         else:
             p["div_paid"] = 0.0
+        # กำไรพิเศษหลังภาษี = รายการพิเศษก่อนภาษี − ผลทางภาษีของรายการนั้น (ไม่มีรายการ = 0)
+        p["np_special"] = (p.pop("unusual") or 0) - (p.pop("unusual_tax") or 0) if p["np"] is not None else None
         start = str(int(y[:4]) - 1) + y[4:]
         p["div_special"] = sum(sp for xd, _, sp in events if start < xd <= y) * shares / 1e6
         periods.append(p)

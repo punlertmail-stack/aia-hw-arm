@@ -3,9 +3,10 @@
 รูปแบบกลาง (record) ที่ตัวอ่านทุกตัวต้องส่งมา:
   ticker, name, sector, fin (bool), price, price_date, mcap (ล้านบาท)
   periods: list เรียงเก่า → ใหม่ (ไม่เกิน 5 ช่วง) แต่ละช่วงยาว 12 เดือนและห่างกัน 1 ปี
-    label, revenue, np, gross_profit, normalized_np, equity, equity_prev,
+    label, revenue, np, np_special, gross_profit, equity, equity_prev,
     equity_total, ib_debt, cur_assets, cur_liab, cfo, fcf, div_paid, div_special
-    (หน่วยล้านบาท · div_paid เป็นค่าบวก · div_special = ส่วนที่เป็นปันผลพิเศษ · ไม่มีข้อมูล = None)
+    (หน่วยล้านบาท · np_special = กำไรพิเศษหลังภาษี · div_paid เป็นค่าบวก
+     div_special = ส่วนที่เป็นปันผลพิเศษ · ไม่มีข้อมูล = None)
   dps, dps_special: {ปี ค.ศ.: ปันผลต่อหุ้นรวม / เฉพาะงวดพิเศษ ที่ XD ในปีนั้น}
 """
 import statistics
@@ -29,7 +30,7 @@ METRICS = {
     "de":         {"label": "IBD/E", "unit": "เท่า", "formula": "หนี้สินที่มีภาระดอกเบี้ย ÷ ส่วนของผู้ถือหุ้นรวม", "inputs": ["ib_debt", "equity_total"]},
     "cr":         {"label": "Current ratio", "unit": "เท่า", "formula": "สินทรัพย์หมุนเวียน ÷ หนี้สินหมุนเวียน", "inputs": ["cur_assets", "cur_liab"]},
     "cfo_np3":    {"label": "CFO ÷ กำไร 3 ปี", "unit": "เท่า", "formula": "ผลรวมเงินสดจากการดำเนินงาน 3 ช่วง ÷ ผลรวมกำไรสุทธิ 3 ช่วง", "inputs": ["cfo", "np"]},
-    "norm_gap":   {"label": "กำไรพิเศษ", "unit": "%", "formula": "(กำไรสุทธิ − กำไรปกติ) ÷ |กำไรสุทธิ| × 100", "inputs": ["np", "normalized_np"]},
+    "norm_gap":   {"label": "กำไรพิเศษ ÷ กำไรสุทธิ", "unit": "%", "formula": "กำไรพิเศษหลังภาษี ÷ |กำไรสุทธิ| × 100 (ช่วงล่าสุด)", "inputs": ["np_special", "np"]},
     "rev_cagr3":  {"label": "CAGR รายได้ 3 ปี", "unit": "%", "formula": "(รายได้ล่าสุด ÷ รายได้ 3 ปีก่อน)^(1/3) − 1", "inputs": ["revenue"]},
     "np_cagr3":   {"label": "CAGR กำไร 3 ปี", "unit": "%", "formula": "(กำไรล่าสุด ÷ กำไร 3 ปีก่อน)^(1/3) − 1 (ทั้งสองค่าต้องเป็นบวก)", "inputs": ["np"]},
     "peg":        {"label": "PEG", "unit": "เท่า", "formula": "P/E ÷ CAGR กำไร 3 ปี (%)", "inputs": ["price", "shares", "np"]},
@@ -132,7 +133,7 @@ def compute(rec):
         "de": div(L.get("ib_debt"), L.get("equity_total")),
         "cr": div(L.get("cur_assets"), L.get("cur_liab")),
         "cfo_np3": div(sum(cfo3), sum(nps3)) if cfo3 and nps3 and sum(nps3) > 0 else None,
-        "norm_gap": pct(np_l - L["normalized_np"], abs(np_l)) if np_l and L.get("normalized_np") is not None else None,
+        "norm_gap": pct(L["np_special"], abs(np_l)) if np_l and L.get("np_special") is not None else None,
         "rev_cagr3": cagr(rev[-4], rev[-1], 3) if len(rev) >= 4 else None,
         "np_cagr3": np_g,
         "peg": div(pe, np_g) if pe and np_g and np_g > 0 else None,
@@ -148,6 +149,23 @@ def compute(rec):
     return {k: rnd(v, 0 if k == "mcap" else 2) for k, v in m.items()}
 
 
+# ตัวชี้วัดที่เปลี่ยนเมื่อใช้ "กำไรปกติ" แทนกำไรสุทธิ (payout ไม่อยู่ในนี้ เพราะแท็บปันผลไม่มีสวิตช์กำไรพิเศษ)
+CORE_KEYS = ["pe", "ey", "roe_last", "roe_avg3", "roe_min3", "roe_sd3", "npm", "cfo_np3",
+             "np_cagr3", "peg", "np_last", "np_min3"]
+
+
+def core_periods(rec):
+    """ช่วงเวลาเดียวกัน แต่ np = กำไรปกติ (กำไรสุทธิ − กำไรพิเศษหลังภาษี)"""
+    return [{**p, "np": p["np"] - (p.get("np_special") or 0) if p.get("np") is not None else None}
+            for p in rec["periods"]]
+
+
+def compute_core(rec):
+    """ตัวชี้วัดชุดกำไรปกติ — คืนเฉพาะ CORE_KEYS"""
+    m = compute({**rec, "periods": core_periods(rec)})
+    return {k: m[k] for k in CORE_KEYS}
+
+
 def history(rec):
     """ประวัติรายช่วงสำหรับกราฟหน้ารายตัว (ล้านบาท ปัด 1 ตำแหน่ง)"""
     ps = rec["periods"]
@@ -155,20 +173,24 @@ def history(rec):
         "p": [p["label"] for p in ps],
         "rev": [rnd(p.get("revenue"), 1) for p in ps],
         "np": [rnd(p.get("np"), 1) for p in ps],
+        "npc": [rnd(p.get("np"), 1) for p in core_periods(rec)],
         "roe": [rnd(roe(p), 2) for p in ps],
+        "roec": [rnd(roe(p), 2) for p in core_periods(rec)],
         "fcf": [rnd(p.get("fcf"), 1) for p in ps],
         "div": [rnd(p.get("div_paid"), 1) for p in ps],
     }
 
 
-def passes(m, fin, preset, alt=None):
+def passes(m, fin, preset, alt=None, core=None):
     """ใช้ตรวจจำนวนที่ผ่านตอน build (หน้าเว็บมีตรรกะเดียวกันใน app.js)
-    alt = ตัวชี้วัดที่ใช้แทน เช่น {"dy": "dy_ex"} ตอนเปิด "ไม่นับปันผลพิเศษ\""""
-    alt = alt or {}
+    alt = ตัวชี้วัดที่ใช้แทน เช่น {"dy": "dy_ex"} ตอนเปิด "ไม่นับปันผลพิเศษ"
+    core = ตัวชี้วัดชุดกำไรปกติ (จาก compute_core) ตอนเปิด "ไม่นับกำไรพิเศษ\""""
+    alt, core = alt or {}, core or {}
     for g in preset["gates"]:
         if fin and g.get("skip_fin"):
             continue
-        v = m.get(alt.get(g["metric"], g["metric"]))
+        k = g["metric"]
+        v = core[k] if k in core else m.get(alt.get(k, k))
         if v is None:
             return False
         ok = {">=": v >= g["value"], "<=": v <= g["value"], ">": v > g["value"], "<": v < g["value"]}[g["op"]]

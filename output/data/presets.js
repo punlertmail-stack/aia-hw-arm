@@ -9,7 +9,11 @@ window.SCREENER_PRESETS = {
    "dy": "dy_ex",
    "payout": "payout_ex"
   },
-  "note": "exclude = true → เกณฑ์และคะแนนใช้ yield/payout ที่ไม่รวมปันผลพิเศษ ปรับได้บนหน้าจอ"
+  "note": "exclude = true → เกณฑ์และคะแนนใช้ yield/payout ที่ไม่รวมปันผลพิเศษ ปรับได้บนหน้าจอ (แสดงเฉพาะแท็บปันผล)"
+ },
+ "special_profit": {
+  "exclude": true,
+  "note": "exclude = true → ตัวชี้วัดที่ใช้กำไร (P/E, ROE, CAGR ฯลฯ) ใช้กำไรปกติ = กำไรสุทธิ − กำไรพิเศษหลังภาษี (แสดงในแท็บอื่นที่ไม่ใช่ปันผล)"
  },
  "presets": [
   {
