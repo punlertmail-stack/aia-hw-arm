@@ -144,6 +144,9 @@ h1 { margin: 0; font-size: 34px; line-height: 1.12; font-weight: 700; letter-spa
 .badges span { background: var(--fill); border-radius: 999px; padding: 3px 10px; }
 .preset-desc { margin: 10px 2px 0; color: var(--text-2); font-size: 14px; }
 
+.controls { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.seg.theme button { padding: 6px 12px; }
+
 /* segmented control */
 .seg {
   position: relative; display: inline-flex; gap: 2px; padding: 2px;

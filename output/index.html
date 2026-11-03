@@ -8,6 +8,10 @@
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="description" content="คัดหุ้นไทย 4 มุมมอง: คุณภาพราคาเหมาะสม · ปันผลยั่งยืน · หุ้นถูก · หุ้นเติบโต">
 <link rel="icon" href="data:,">
+<script>
+  // ใส่ธีมที่ผู้ใช้เลือกไว้ก่อนวาดหน้า กันหน้าจอกะพริบสีผิด
+  try { var t = localStorage.getItem("screener-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,10 +21,18 @@
       <p class="eyebrow">AI Investor Alpha · หุ้นไทย 4 มุมมอง</p>
       <h1>Thai Stock Screener</h1>
     </div>
-    <div class="seg source" role="group" aria-label="แหล่งข้อมูล">
-      <span class="seg-thumb" aria-hidden="true"></span>
-      <button type="button" data-source="yahoo">Yahoo</button>
-      <button type="button" data-source="setsmart">SETSMART</button>
+    <div class="controls">
+      <div class="seg source" role="group" aria-label="แหล่งข้อมูล">
+        <span class="seg-thumb" aria-hidden="true"></span>
+        <button type="button" data-source="yahoo">Yahoo</button>
+        <button type="button" data-source="setsmart">SETSMART</button>
+      </div>
+      <div class="seg theme" role="group" aria-label="ธีมสี">
+        <span class="seg-thumb" aria-hidden="true"></span>
+        <button type="button" data-theme-set="auto" title="ตามการตั้งค่าของเครื่อง">อัตโนมัติ</button>
+        <button type="button" data-theme-set="light" title="โหมดสว่าง">☀︎ สว่าง</button>
+        <button type="button" data-theme-set="dark" title="โหมดมืด">☾ มืด</button>
+      </div>
     </div>
   </div>
   <p class="badges" id="badges"></p>

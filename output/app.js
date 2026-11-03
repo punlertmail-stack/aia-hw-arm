@@ -400,6 +400,25 @@
   addEventListener("resize", placeThumbs);
   if (document.fonts) document.fonts.ready.then(placeThumbs);   // ความกว้างปุ่มเปลี่ยนหลังฟอนต์โหลดเสร็จ
 
+  // ธีม: อัตโนมัติ (ตามเครื่อง) / สว่าง / มืด — จำค่าไว้ในเบราว์เซอร์ของผู้ใช้แต่ละคน
+  const themeNow = () => document.documentElement.dataset.theme || "auto";
+  function renderTheme() {
+    document.querySelectorAll("[data-theme-set]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.themeSet === themeNow()));
+    placeThumbs();
+  }
+  function setTheme(t) {
+    if (t === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = t;
+    try { t === "auto" ? localStorage.removeItem("screener-theme") : localStorage.setItem("screener-theme", t); } catch (e) { /* โหมดส่วนตัว: ใช้ได้แค่หน้านี้ */ }
+    renderTheme();
+    const open = !$("detail").hidden && $("detail-title").textContent;
+    if (open) openDetail(open);   // วาดกราฟใหม่ด้วยสีของธีมใหม่
+  }
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    const open = themeNow() === "auto" && !$("detail").hidden && $("detail-title").textContent;
+    if (open) openDetail(open);
+  });
+
   function renderAll() {
     renderHeader();
     renderPanel();
@@ -408,6 +427,8 @@
 
   // ---------- เหตุการณ์ ----------
   document.addEventListener("click", (e) => {
+    const themeBtn = e.target.closest("[data-theme-set]");
+    if (themeBtn) return setTheme(themeBtn.dataset.themeSet);
     const src = e.target.closest("[data-source]");
     if (src && !src.disabled) {
       state.source = src.dataset.source;
@@ -451,6 +472,7 @@
   if (DATA[qs.get("src")]) state.source = qs.get("src");
   if (PRESETS.presets.some((p) => p.id === qs.get("preset"))) state.presetId = qs.get("preset");
   renderAll();
+  renderTheme();
   if (qs.get("t")) openDetail(qs.get("t").toUpperCase());
   // จอแคบ: หุบแผงเกณฑ์ไว้ก่อน ให้ตารางขึ้นมาให้เห็นทันที
   if (matchMedia("(max-width: 860px)").matches) document.querySelector("#panel details").open = false;
