@@ -1,76 +1,76 @@
-/* Thai Stock Screener — การ์ดขาวโค้งมนบนพื้นไล่สีม่วงอ่อน · ปุ่มเลือกเป็นแคปซูลสีเข้ม · เน้นสี indigo
-   สีกราฟ (--series-*) = iOS indigo + orange ผ่านตัวตรวจสีสำหรับคนตาบอดสีแล้ว (ดู PROJECT_MEMORY.md) */
+/* Thai Stock Screener — การ์ดขาวโค้งมนบนพื้นไล่สีฟ้าอ่อน · ปุ่มเลือกเป็นแคปซูลสีเข้ม · ปุ่มและสีเน้นเป็นสีเขียว
+   สีกราฟ (--series-*) = เขียว + iOS indigo ผ่านตัวตรวจสีสำหรับคนตาบอดสีแล้ว (ดู PROJECT_MEMORY.md) */
 :root {
   color-scheme: light;
-  --bg: #f1f2f9;
+  --bg: #f0f4fa;
   --bg-hi: rgba(255, 255, 255, .95);
-  --bg-tint-1: rgba(150, 140, 255, .24);
-  --bg-tint-2: rgba(120, 170, 255, .18);
+  --bg-tint-1: rgba(90, 160, 255, .24);
+  --bg-tint-2: rgba(120, 200, 255, .20);
   --surface: #ffffff;
-  --surface-2: #f5f6fb;
+  --surface-2: #f4f7fb;
   --card: linear-gradient(180deg, rgba(255, 255, 255, .98), rgba(255, 255, 255, .84));
   --card-edge: rgba(255, 255, 255, .9);
-  --sheet: rgba(247, 247, 252, .92);
-  --hairline: rgba(60, 60, 90, .12);
-  --text: #15151c;
-  --text-2: rgba(50, 50, 70, .66);
-  --text-3: rgba(50, 50, 70, .40);
-  --fill: rgba(120, 120, 150, .13);
-  --ink: #16161d;
+  --sheet: rgba(246, 248, 252, .92);
+  --hairline: rgba(40, 60, 90, .12);
+  --text: #121620;
+  --text-2: rgba(40, 55, 75, .68);
+  --text-3: rgba(40, 55, 75, .42);
+  --fill: rgba(110, 130, 160, .14);
+  --ink: #121620;
   --ink-text: #ffffff;
-  --accent: #5856d6;
-  --accent-2: #7a83f5;
-  --accent-ink: #4644c0;
-  --accent-soft: rgba(88, 86, 214, .12);
-  --accent-grad: linear-gradient(135deg, #7079f2 0%, #4b52d1 100%);
+  --accent: #1f9d55;
+  --accent-2: #4cd47a;
+  --accent-ink: #157a3e;
+  --accent-soft: rgba(31, 157, 85, .13);
+  --accent-grad: linear-gradient(135deg, #3cc46c 0%, #13874a 100%);
   --green-ink: #248a3d;
   --red: #ff3b30;
   --red-ink: #d70015;
   --orange: #ff9500;
   --orange-ink: #c93400;
   --spark-flat: #8e8e98;
-  --series-1: #5856d6;
-  --series-2: #ff9500;
-  --grid: rgba(60, 60, 90, .10);
-  --shadow: 0 1px 2px rgba(30, 30, 80, .04), 0 12px 32px rgba(40, 40, 120, .07);
-  --shadow-hover: 0 2px 4px rgba(30, 30, 80, .05), 0 22px 48px rgba(40, 40, 120, .13);
-  --shadow-lift: 0 24px 64px rgba(30, 30, 80, .20);
+  --series-1: #1f9d55;
+  --series-2: #5856d6;
+  --grid: rgba(40, 60, 90, .10);
+  --shadow: 0 1px 2px rgba(15, 35, 70, .04), 0 12px 32px rgba(20, 50, 110, .08);
+  --shadow-hover: 0 2px 4px rgba(15, 35, 70, .05), 0 22px 48px rgba(20, 50, 110, .14);
+  --shadow-lift: 0 24px 64px rgba(15, 35, 70, .20);
   --radius: 28px;
   --radius-s: 16px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --bg: #0a0a12;
-    --bg-hi: rgba(70, 70, 140, .22);
-    --bg-tint-1: rgba(94, 92, 230, .24);
-    --bg-tint-2: rgba(40, 90, 200, .16);
-    --surface: #17171f;
-    --surface-2: #20202a;
-    --card: linear-gradient(180deg, rgba(34, 34, 46, .94), rgba(24, 24, 33, .86));
+    --bg: #070c16;
+    --bg-hi: rgba(50, 90, 160, .22);
+    --bg-tint-1: rgba(10, 132, 255, .20);
+    --bg-tint-2: rgba(40, 170, 230, .14);
+    --surface: #131821;
+    --surface-2: #1b222d;
+    --card: linear-gradient(180deg, rgba(30, 36, 48, .94), rgba(20, 25, 34, .86));
     --card-edge: rgba(255, 255, 255, .07);
-    --sheet: rgba(18, 18, 26, .92);
-    --hairline: rgba(160, 160, 200, .16);
-    --text: #f4f4f8;
-    --text-2: rgba(225, 225, 240, .64);
-    --text-3: rgba(225, 225, 240, .36);
-    --fill: rgba(130, 130, 160, .22);
+    --sheet: rgba(13, 17, 25, .92);
+    --hairline: rgba(160, 180, 210, .15);
+    --text: #f2f5fa;
+    --text-2: rgba(220, 228, 240, .64);
+    --text-3: rgba(220, 228, 240, .36);
+    --fill: rgba(130, 145, 170, .22);
     --ink: #f2f2f7;
-    --ink-text: #0a0a12;
-    --accent: #5e5ce6;
-    --accent-2: #8d93ff;
-    --accent-ink: #b0afff;
-    --accent-soft: rgba(94, 92, 230, .24);
-    --accent-grad: linear-gradient(135deg, #7a82ff 0%, #5150dc 100%);
+    --ink-text: #070c16;
+    --accent: #28a84e;
+    --accent-2: #63e68a;
+    --accent-ink: #5fe08a;
+    --accent-soft: rgba(48, 209, 88, .20);
+    --accent-grad: linear-gradient(135deg, #3ddc6c 0%, #178f47 100%);
     --green-ink: #30d158;
     --red: #ff453a;
     --red-ink: #ff6961;
     --orange: #ff9f0a;
     --orange-ink: #ffb340;
     --spark-flat: #7c7c88;
-    --series-1: #5e5ce6;
-    --series-2: #da7708;
-    --grid: rgba(160, 160, 200, .14);
+    --series-1: #28a84e;
+    --series-2: #5e5ce6;
+    --grid: rgba(160, 180, 210, .13);
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .35);
     --shadow-hover: 0 2px 4px rgba(0, 0, 0, .3), 0 22px 48px rgba(0, 0, 0, .5);
     --shadow-lift: 0 24px 64px rgba(0, 0, 0, .7);
@@ -78,36 +78,36 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0a0a12;
-  --bg-hi: rgba(70, 70, 140, .22);
-  --bg-tint-1: rgba(94, 92, 230, .24);
-  --bg-tint-2: rgba(40, 90, 200, .16);
-  --surface: #17171f;
-  --surface-2: #20202a;
-  --card: linear-gradient(180deg, rgba(34, 34, 46, .94), rgba(24, 24, 33, .86));
+  --bg: #070c16;
+  --bg-hi: rgba(50, 90, 160, .22);
+  --bg-tint-1: rgba(10, 132, 255, .20);
+  --bg-tint-2: rgba(40, 170, 230, .14);
+  --surface: #131821;
+  --surface-2: #1b222d;
+  --card: linear-gradient(180deg, rgba(30, 36, 48, .94), rgba(20, 25, 34, .86));
   --card-edge: rgba(255, 255, 255, .07);
-  --sheet: rgba(18, 18, 26, .92);
-  --hairline: rgba(160, 160, 200, .16);
-  --text: #f4f4f8;
-  --text-2: rgba(225, 225, 240, .64);
-  --text-3: rgba(225, 225, 240, .36);
-  --fill: rgba(130, 130, 160, .22);
+  --sheet: rgba(13, 17, 25, .92);
+  --hairline: rgba(160, 180, 210, .15);
+  --text: #f2f5fa;
+  --text-2: rgba(220, 228, 240, .64);
+  --text-3: rgba(220, 228, 240, .36);
+  --fill: rgba(130, 145, 170, .22);
   --ink: #f2f2f7;
-  --ink-text: #0a0a12;
-  --accent: #5e5ce6;
-  --accent-2: #8d93ff;
-  --accent-ink: #b0afff;
-  --accent-soft: rgba(94, 92, 230, .24);
-  --accent-grad: linear-gradient(135deg, #7a82ff 0%, #5150dc 100%);
+  --ink-text: #070c16;
+  --accent: #28a84e;
+  --accent-2: #63e68a;
+  --accent-ink: #5fe08a;
+  --accent-soft: rgba(48, 209, 88, .20);
+  --accent-grad: linear-gradient(135deg, #3ddc6c 0%, #178f47 100%);
   --green-ink: #30d158;
   --red: #ff453a;
   --red-ink: #ff6961;
   --orange: #ff9f0a;
   --orange-ink: #ffb340;
   --spark-flat: #7c7c88;
-  --series-1: #5e5ce6;
-  --series-2: #da7708;
-  --grid: rgba(160, 160, 200, .14);
+  --series-1: #28a84e;
+  --series-2: #5e5ce6;
+  --grid: rgba(160, 180, 210, .13);
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 12px 32px rgba(0, 0, 0, .35);
   --shadow-hover: 0 2px 4px rgba(0, 0, 0, .3), 0 22px 48px rgba(0, 0, 0, .5);
   --shadow-lift: 0 24px 64px rgba(0, 0, 0, .7);
@@ -224,7 +224,7 @@ input[type="checkbox"]::after {
 input[type="checkbox"]:checked { background: var(--accent-grad); }
 input[type="checkbox"]:checked::after { transform: translateX(20px); }
 
-/* slider: รางบาง ส่วนที่เติมไล่สี indigo (--p ตั้งจาก app.js) */
+/* slider: รางบาง ส่วนที่เติมไล่สีเขียว (--p ตั้งจาก app.js) */
 input[type="range"] {
   -webkit-appearance: none; appearance: none; width: 100%; height: 28px; margin: 4px 0 0; background: transparent; cursor: pointer;
 }
@@ -236,11 +236,11 @@ input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; backgro
 input[type="range"]::-moz-range-progress { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none; width: 24px; height: 24px; margin-top: -9px; border-radius: 50%; border: 0;
-  background: var(--accent); box-shadow: 0 0 0 3px var(--surface), 0 3px 10px rgba(40, 40, 120, .3);
+  background: var(--accent); box-shadow: 0 0 0 3px var(--surface), 0 3px 10px rgba(20, 50, 110, .3);
 }
 input[type="range"]::-moz-range-thumb {
   width: 24px; height: 24px; border-radius: 50%; border: 0; background: var(--accent);
-  box-shadow: 0 0 0 3px var(--surface), 0 3px 10px rgba(40, 40, 120, .3);
+  box-shadow: 0 0 0 3px var(--surface), 0 3px 10px rgba(20, 50, 110, .3);
 }
 
 .reset {
