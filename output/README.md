@@ -13,6 +13,10 @@
 |---|---|
 | ![หน้าหลัก](screenshot-main.png) | ![หน้ารายตัว](screenshot-detail.png) |
 
+ปันผลพิเศษ (ADVANC · SETSMART · preset ปันผลยั่งยืน): ป้าย "พิเศษ" ในตาราง และกราฟ DPS แยกส่วนปกติ/พิเศษ
+
+![ปันผลพิเศษ](screenshot-special.png)
+
 ## ไฟล์ในโฟลเดอร์นี้
 
 | ไฟล์ | คืออะไร |

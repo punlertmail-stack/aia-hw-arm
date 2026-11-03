@@ -42,6 +42,8 @@ def field_sources():
     yahoo = "https://finance.yahoo.com/quote/{t}.BK/"
     src["div_paid"] = {"name": "Yahoo dividends × sharesOutstanding", "url": yahoo + "history/",
                        "how": "ปันผลต่อหุ้นที่ XD ใน 12 เดือนของช่วง × จำนวนหุ้นปัจจุบัน (dividends_paid ของ SETSMART ว่าง 61% ของแถว)"}
+    src["div_special"] = {"name": "Yahoo dividends (ส่วนเกินของงวดที่ตีธงพิเศษ) × sharesOutstanding", "url": yahoo + "history/",
+                          "how": "งวดที่ DPS ≥ 3 เท่าของมัธยฐานงวดก่อนหน้า และ ≥ 1% ของราคาวัน XD ใน 12 เดือนของช่วง · นับเฉพาะส่วนที่เกินมัธยฐาน"}
     src["price"] = {"name": "Yahoo Close (ราคาปิด)", "how": "Yahoo", "url": yahoo + "history/"}
     src["shares"] = {"name": "Yahoo sharesOutstanding", "how": "Yahoo", "url": yahoo + "key-statistics/"}
     return src
@@ -118,10 +120,11 @@ def quarter_end(q):
     return date(y, 3 * i + 3, 31 if i in (0, 3) else 30)
 
 
-def div_in_window(events, shares, end_q):
-    """ปันผลจ่าย (ล้านบาท) = DPS ที่ XD ในช่วง 12 เดือนที่จบไตรมาส end_q × จำนวนหุ้น"""
+def div_in_window(events, shares, end_q, special_only=False):
+    """ปันผลจ่าย (ล้านบาท) = DPS ที่ XD ในช่วง 12 เดือนที่จบไตรมาส end_q × จำนวนหุ้น
+    events = [(xd, dps, ส่วนที่เป็นปันผลพิเศษ)] จากตัวอ่าน Yahoo · special_only → รวมเฉพาะส่วนพิเศษ"""
     start, end = quarter_end(end_q - 4).isoformat(), quarter_end(end_q).isoformat()
-    return sum(v for xd, v in events if start < xd <= end) * shares / 1e6
+    return sum(sp if special_only else v for xd, v, sp in events if start < xd <= end) * shares / 1e6
 
 
 def to_record(symbol, company, quarters, px):
@@ -147,6 +150,7 @@ def to_record(symbol, company, quarters, px):
         p["equity_prev"] = first(prev, AT_END["equity"]) if prev else None
         p["normalized_np"] = None
         p["div_paid"] = div_in_window(px["div_events"], px["shares"], end)
+        p["div_special"] = div_in_window(px["div_events"], px["shares"], end, special_only=True)
         periods.append(p)
     if not periods:
         return None
@@ -161,6 +165,7 @@ def to_record(symbol, company, quarters, px):
         "mcap": px["price"] * px["shares"] / 1e6,
         "periods": periods,
         "dps": px["dps"],
+        "dps_special": px["dps_special"],
     }
 
 

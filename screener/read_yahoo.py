@@ -3,10 +3,18 @@
 ไฟล์ดิบสร้างโดย data/fetch.py ของ workspace: งบรายปี (income_stmt, balance_sheet, cashflow)
 หน่วยบาท, ราคารายวัน, ปันผลรายครั้ง
 """
+import bisect
 import json
+import statistics
+from datetime import date
 from pathlib import Path
 
 URL = "https://finance.yahoo.com/quote/{t}.BK/{page}/"
+
+# ปันผลพิเศษ: กฎเดียวกับ tools/build_fundamentals.py ของ workspace (dashboard Day 1)
+SPECIAL_X = 3.0          # DPS งวดนั้น >= 3 เท่าของค่ามัธยฐานงวดก่อนหน้า
+SPECIAL_MIN_PCT = 1.0    # และต้อง >= 1% ของราคา ณ วัน XD ไม่งั้นเล็กเกินไปที่จะเตือน
+SAME_SEASON_DAYS = 45    # เทียบงวดเดียวกันของปีก่อน ๆ ก่อน (กันงวดปลายปีที่ใหญ่กว่ากลางปีเป็นปกติ)
 
 # ช่องในรูปแบบกลาง → (งบ, ชื่อรายการใน Yahoo, หน้าเว็บที่ใช้เป็นที่มา)
 FIELDS = {
@@ -32,7 +40,30 @@ def field_sources():
     src["price"] = {"name": "Close (ราคาปิด)", "page": "history"}
     src["shares"] = {"name": "sharesOutstanding", "page": "key-statistics"}
     src["equity_prev"] = src["equity"]
+    src["div_special"] = {"name": "Yahoo dividends (ส่วนเกินของงวดที่ตีธงพิเศษ) × sharesOutstanding", "page": "history",
+                          "how": f"งวดที่ DPS ≥ {SPECIAL_X:g} เท่าของมัธยฐานงวดก่อนหน้า และ ≥ {SPECIAL_MIN_PCT:g}% ของราคาวัน XD · นับเฉพาะส่วนที่เกินมัธยฐาน"}
     return src
+
+
+def season_gap(a, b):
+    """ระยะห่าง (วัน) ระหว่างวันในปีของสองวันที่ วนรอบปี"""
+    d = abs(date.fromisoformat(a).timetuple().tm_yday - date.fromisoformat(b).timetuple().tm_yday)
+    return min(d, 365 - d)
+
+
+def special_parts(events, close_on):
+    """events = [(xd, dps)] เรียงตามวัน · close_on(xd) = ราคาปิด ณ วัน XD
+    → ส่วนที่เป็นปันผลพิเศษของแต่ละงวด (บาท/หุ้น) = DPS − มัธยฐานงวดที่ใช้เทียบ (งวดปกติ = 0)
+    นับเฉพาะส่วนเกิน เพราะงวดที่จ่ายพิเศษมักรวมปันผลปกติของงวดนั้นไว้ด้วย"""
+    parts = []
+    for i, (xd, dps) in enumerate(events):
+        px = close_on(xd)
+        same = [v for d0, v in events[:i] if season_gap(d0, xd) <= SAME_SEASON_DAYS][-3:]
+        prior = same if len(same) >= 2 else [v for _, v in events[max(0, i - 6):i]]
+        base = statistics.median(prior) if len(prior) >= 2 else None
+        big = px and dps / px * 100 >= SPECIAL_MIN_PCT and base is not None and dps >= SPECIAL_X * base
+        parts.append(dps - base if big else 0.0)
+    return parts
 
 
 def pick(stmt, names):
@@ -63,10 +94,16 @@ def to_record(d):
     shares = info.get("sharesOutstanding")
     if not px or not shares:
         return None
-    events = [(x["xd_date"], x["dps"]) for x in d.get("dividends") or [] if x.get("dps")]
-    dps = {}
-    for xd, v in events:
+    priced = [(p["date"], p["close"]) for p in d.get("prices") or [] if p.get("close") is not None]
+    dates = [x for x, _ in priced]
+    close_on = lambda xd: priced[i - 1][1] if (i := bisect.bisect_right(dates, xd)) else None
+    raw = sorted((x["xd_date"], x["dps"]) for x in d.get("dividends") or [] if x.get("dps"))
+    events = [(xd, v, sp) for (xd, v), sp in zip(raw, special_parts(raw, close_on))]
+    dps, dps_sp = {}, {}
+    for xd, v, sp in events:
         dps[xd[:4]] = round(dps.get(xd[:4], 0) + v, 4)
+        if sp:
+            dps_sp[xd[:4]] = round(dps_sp.get(xd[:4], 0) + sp, 4)
 
     inc, bs = d.get("income_stmt") or {}, d.get("balance_sheet") or {}
     years = sorted(inc)[-MAX_PERIODS:]
@@ -84,6 +121,8 @@ def to_record(d):
             p["div_paid"] = dps[y[:4]] * shares / 1e6
         else:
             p["div_paid"] = 0.0
+        start = str(int(y[:4]) - 1) + y[4:]
+        p["div_special"] = sum(sp for xd, _, sp in events if start < xd <= y) * shares / 1e6
         periods.append(p)
     if not periods:
         return None
@@ -100,6 +139,7 @@ def to_record(d):
         "fetched": d.get("fetched_ict"),
         "periods": periods,
         "dps": dps,
+        "dps_special": dps_sp,
         "div_events": events,
     }
 

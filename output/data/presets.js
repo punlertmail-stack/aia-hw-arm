@@ -3,6 +3,14 @@ window.SCREENER_PRESETS = {
   "min_mcap": 1000,
   "note": "หุ้นที่มี market cap (ล้านบาท) ต่ำกว่านี้ไม่นำมาคัด ปรับได้บนหน้าจอ"
  },
+ "special_dividend": {
+  "exclude": true,
+  "alt": {
+   "dy": "dy_ex",
+   "payout": "payout_ex"
+  },
+  "note": "exclude = true → เกณฑ์และคะแนนใช้ yield/payout ที่ไม่รวมปันผลพิเศษ ปรับได้บนหน้าจอ"
+ },
  "presets": [
   {
    "id": "quality",

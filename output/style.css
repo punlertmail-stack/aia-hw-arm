@@ -133,6 +133,7 @@ tr.failed td.reasons { opacity: 1; }
 .chip { display: inline-block; margin: 0 4px 2px 0; padding: 1px 6px; border-radius: 10px; font-size: 12px; background: var(--critical-bg); color: var(--critical); }
 .chip.ok { background: transparent; color: var(--good); border: 1px solid currentColor; }
 .chip.fin { background: var(--fin-bg); color: var(--accent-ink); }
+.chip.warn { background: transparent; color: var(--text-2); border: 1px dashed var(--series-2); }
 .hint { color: var(--text-3); font-size: 12px; }
 
 /* popover ที่มา */

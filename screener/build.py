@@ -28,6 +28,7 @@ ICT = timezone(timedelta(hours=7))
 
 def stock_row(rec):
     dps = {y: rec["dps"][y] for y in sorted(rec["dps"])[-DPS_YEARS:]}
+    dpss = {y: v for y, v in rec["dps_special"].items() if y in dps}
     return {
         "t": rec["ticker"],
         "n": rec["name"],
@@ -37,6 +38,7 @@ def stock_row(rec):
         "m": metrics.compute(rec),
         "h": metrics.history(rec),
         "dps": dps,
+        "dpss": dpss,
     }
 
 
@@ -52,9 +54,14 @@ def write_js(name, meta, recs):
 
 def summarize(name, payload, presets):
     stocks = [s for s in payload["stocks"] if (s["m"]["mcap"] or 0) >= presets["universe"]["min_mcap"]]
-    counts = {p["id"]: sum(metrics.passes(s["m"], s["fin"], p) for s in stocks) for p in presets["presets"]}
+    sd = presets["special_dividend"]
+    on, off = (sd["alt"], None) if sd["exclude"] else (None, sd["alt"])
+    counts = {p["id"]: sum(metrics.passes(s["m"], s["fin"], p, on) for s in stocks) for p in presets["presets"]}
+    other = {p["id"]: sum(metrics.passes(s["m"], s["fin"], p, off) for s in stocks) for p in presets["presets"]}
+    flagged = sum(1 for s in stocks if s["m"]["sp_share"])
     size = (OUT / f"{name}.js").stat().st_size / 1e6
-    print(f"{name}: {len(payload['stocks'])} ตัว · ฐานคัด {len(stocks)} ตัว · ผ่าน {counts} · {size:.2f} MB")
+    print(f"{name}: {len(payload['stocks'])} ตัว · ฐานคัด {len(stocks)} ตัว · ผ่าน (ค่าตั้งต้น) {counts} · {size:.2f} MB\n"
+          f"  ถ้า{'นับ' if sd['exclude'] else 'ไม่นับ'}ปันผลพิเศษ: ผ่าน {other} · มีปันผลพิเศษในช่วงล่าสุด {flagged} ตัว")
 
 
 def main():
@@ -92,7 +99,7 @@ def main():
     if xlsx is None or not xlsx.exists():
         print("ไม่พบไฟล์ SETSMART xlsx → ข้ามโหมด SETSMART")
         return
-    prices = {r["ticker"]: {k: r[k] for k in ("price", "price_date", "shares", "name", "sector", "dps", "div_events")} for r in yahoo}
+    prices = {r["ticker"]: {k: r[k] for k in ("price", "price_date", "shares", "name", "sector", "dps", "dps_special", "div_events")} for r in yahoo}
     recs, latest = read_setsmart.load(xlsx, prices, a.min_period)
     meta = {
         "source": "setsmart", "label": "SETSMART",

@@ -13,8 +13,10 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   // ---------- สถานะ ----------
+  const ALT = (PRESETS.special_dividend || {}).alt || {};
   const fresh = () => ({
     minMcap: PRESETS.universe.min_mcap,
+    exSpecial: !!(PRESETS.special_dividend || {}).exclude,
     presets: Object.fromEntries(PRESETS.presets.map((p) => [p.id, {
       gates: p.gates.map((g) => ({ ...g, on: true })),
       weights: p.score.map((s) => ({ ...s })),
@@ -34,6 +36,8 @@
   const defs = () => ds().meta.metrics;
   const presetDef = () => PRESETS.presets.find((p) => p.id === state.presetId);
   const cur = () => state.presets[state.presetId];
+  // ตัวชี้วัดที่ใช้จริง: เปิด "ไม่นับปันผลพิเศษ" แล้ว dy → dy_ex, payout → payout_ex
+  const eff = (k) => (state.exSpecial && ALT[k]) || k;
 
   // ---------- ตัวเลข ----------
   function fmt(v, unit) {
@@ -50,9 +54,9 @@
     const fails = [];
     for (const g of gates) {
       if (!g.on || (stock.fin && g.skip_fin)) continue;
-      const v = stock.m[g.metric];
-      if (v === null || v === undefined) fails.push(`ข้อมูลไม่พอ: ${label(g.metric)}`);
-      else if (!OPS[g.op](v, g.value)) fails.push(`${label(g.metric)} ${withUnit(g.metric, v)} (เกณฑ์ ${OP_TEXT[g.op]} ${fmt(g.value, unit(g.metric))})`);
+      const k = eff(g.metric), v = stock.m[k];
+      if (v === null || v === undefined) fails.push(`ข้อมูลไม่พอ: ${label(k)}`);
+      else if (!OPS[g.op](v, g.value)) fails.push(`${label(k)} ${withUnit(k, v)} (เกณฑ์ ${OP_TEXT[g.op]} ${fmt(g.value, unit(k))})`);
     }
     return fails;
   }
@@ -80,9 +84,9 @@
     const rows = base.map((s) => ({ s, fails: evaluate(s, gates) }));
     const passed = rows.filter((r) => !r.fails.length);
     const wsum = weights.reduce((a, w) => a + w.weight, 0) || 1;
-    const pcts = weights.map((w) => percentiles(passed, w.metric, w.better));
+    const pcts = weights.map((w) => percentiles(passed, eff(w.metric), w.better));
     passed.forEach((r, i) => {
-      r.parts = weights.map((w, j) => ({ metric: w.metric, pct: pcts[j][i], w: w.weight / wsum }));
+      r.parts = weights.map((w, j) => ({ metric: eff(w.metric), pct: pcts[j][i], w: w.weight / wsum }));
       r.score = r.parts.reduce((a, p) => a + p.pct * p.w, 0);
     });
     [...passed].sort((a, b) => b.score - a.score).forEach((r, i) => { r.rank = i + 1; });
@@ -119,12 +123,14 @@
 
   function renderPanel() {
     $("universe").innerHTML = rangeCtl("mcap", "Market cap ขั้นต่ำ", state.minMcap, 0, 20000, 500,
-      { suffix: " ลบ.", aria: "Market cap ขั้นต่ำ" });
+      { suffix: " ลบ.", aria: "Market cap ขั้นต่ำ" })
+      + `<div class="ctl"><label class="ctl-head"><input type="checkbox" id="ex-special" ${state.exSpecial ? "checked" : ""}> ไม่นับปันผลพิเศษ</label>
+         <div class="note">ใช้ yield และ payout ที่หักส่วนเกินของงวดที่ DPS ≥ 3 เท่าของปกติออก (กฎเดียวกับ dashboard Day 1)</div></div>`;
     $("gates").innerHTML = cur().gates.map((g, i) => {
-      const u = unit(g.metric);
-      return rangeCtl("g" + i, esc(label(g.metric)), g.value, g.min, g.max, g.step, {
+      const k = eff(g.metric), u = unit(k);
+      return rangeCtl("g" + i, esc(label(k)), g.value, g.min, g.max, g.step, {
         check: g.on, off: !g.on, prefix: OP_TEXT[g.op] + " ", suffix: u === "%" ? "%" : " " + u,
-        aria: label(g.metric), note: g.skip_fin ? "ไม่ใช้กับธนาคาร/การเงิน" : "",
+        aria: label(k), note: g.skip_fin ? "ไม่ใช้กับธนาคาร/การเงิน" : "",
       });
     }).join("");
     renderWeights();
@@ -134,13 +140,19 @@
     const ws = cur().weights;
     const sum = ws.reduce((a, w) => a + w.weight, 0) || 1;
     $("weights").innerHTML = ws.map((w, i) => rangeCtl("w" + i,
-      `${esc(label(w.metric))} <span class="na">(${w.better === "low" ? "ต่ำดี" : "สูงดี"})</span>`,
-      w.weight, 0, 100, 5, { suffix: ` = ${Math.round(w.weight / sum * 100)}%`, aria: "น้ำหนัก " + label(w.metric) })).join("");
+      `${esc(label(eff(w.metric)))} <span class="na">(${w.better === "low" ? "ต่ำดี" : "สูงดี"})</span>`,
+      w.weight, 0, 100, 5, { suffix: ` = ${Math.round(w.weight / sum * 100)}%`, aria: "น้ำหนัก " + label(eff(w.metric)) })).join("");
   }
 
   function onPanelInput(e) {
+    if (e.target.id === "ex-special") {
+      if (e.type !== "change") return;
+      state.exSpecial = e.target.checked;
+      renderPanel();
+      return renderTable();
+    }
     const ctl = e.target.closest(".ctl");
-    if (!ctl) return;
+    if (!ctl || !ctl.dataset.id) return;
     const id = ctl.dataset.id, role = e.target.dataset.role;
     if (role === "on") {
       cur().gates[+id.slice(1)].on = e.target.checked;
@@ -171,8 +183,9 @@
   // ---------- ตาราง ----------
   function columns() {
     const keys = [];
-    for (const g of cur().gates) if (!keys.includes(g.metric)) keys.push(g.metric);
-    for (const w of cur().weights) if (!keys.includes(w.metric)) keys.push(w.metric);
+    for (const g of cur().gates) if (!keys.includes(eff(g.metric))) keys.push(eff(g.metric));
+    for (const w of cur().weights) if (!keys.includes(eff(w.metric))) keys.push(eff(w.metric));
+    if (state.presetId === "dividend") keys.push("sp_share");
     keys.push("mcap");
     return keys;
   }
@@ -192,7 +205,7 @@
       const tip = ok ? r.parts.map((p) => `${label(p.metric)}: ${Math.round(p.pct)} × ${Math.round(p.w * 100)}%`).join("\n") : "";
       html += `<tr class="${ok ? "" : "failed"}">
         <td class="l">${ok ? r.rank : "–"}</td>
-        <td class="l sticky"><button type="button" class="tk" data-detail="${esc(s.t)}">${esc(s.t)}</button>${s.fin ? ' <span class="chip fin" title="ธนาคาร/การเงิน">การเงิน</span>' : ""}</td>
+        <td class="l sticky"><button type="button" class="tk" data-detail="${esc(s.t)}">${esc(s.t)}</button>${s.fin ? ' <span class="chip fin" title="ธนาคาร/การเงิน">การเงิน</span>' : ""}${s.m.sp_share ? ` <span class="chip warn" title="ปันผลพิเศษ ${fmt(s.m.sp_share)}% ของปันผลช่วงล่าสุด">พิเศษ</span>` : ""}</td>
         <td class="l name" title="${esc(s.n)}">${esc(s.n)}</td>
         <td>${ok ? `<span class="score" title="${esc(tip)}"><span class="bar"><i style="width:${r.score.toFixed(0)}%"></i></span>${r.score.toFixed(0)}</span>` : '<span class="na">–</span>'}</td>
         ${cols.map((k) => `<td>${numBtn(s, k)}</td>`).join("")}
@@ -261,13 +274,13 @@
       <h3>ย้อนหลัง</h3>
       <p class="chart-title">รายได้และกำไรสุทธิ (ล้านบาท)</p><div class="chart"><canvas id="c-rev" role="img" aria-label="กราฟรายได้และกำไรสุทธิ"></canvas></div>
       <p class="chart-title">ROE (%)</p><div class="chart"><canvas id="c-roe" role="img" aria-label="กราฟ ROE"></canvas></div>
-      <p class="chart-title">ปันผลต่อหุ้นตามปีที่ขึ้น XD (บาท)</p><p class="chart-note">ที่มา: Yahoo dividends ทั้งสองโหมด</p><div class="chart"><canvas id="c-dps" role="img" aria-label="กราฟปันผลต่อหุ้น"></canvas></div>
+      <p class="chart-title">ปันผลต่อหุ้นตามปีที่ขึ้น XD (บาท)</p><p class="chart-note">ที่มา: Yahoo dividends ทั้งสองโหมด · ส่วนพิเศษ = ส่วนที่เกินมัธยฐานของงวดที่ DPS ≥ 3 เท่าของปกติ</p><div class="chart"><canvas id="c-dps" role="img" aria-label="กราฟปันผลต่อหุ้น"></canvas></div>
       <p class="chart-title">FCF เทียบปันผลจ่าย (ล้านบาท)</p><div class="chart"><canvas id="c-fcf" role="img" aria-label="กราฟกระแสเงินสดอิสระเทียบปันผลจ่าย"></canvas></div>
       <details><summary>ดูเป็นตาราง</summary>
         <table><thead><tr><th class="l">ช่วง</th><th>รายได้</th><th>กำไร</th><th>ROE %</th><th>FCF</th><th>ปันผลจ่าย</th></tr></thead>
         <tbody>${h.p.map((p, i) => `<tr><td class="l">${esc(p)}</td><td>${fmt(h.rev[i], "ลบ.")}</td><td>${fmt(h.np[i], "ลบ.")}</td><td>${fmt(h.roe[i])}</td><td>${fmt(h.fcf[i], "ลบ.")}</td><td>${fmt(h.div[i], "ลบ.")}</td></tr>`).join("")}</tbody></table>
-        <table><thead><tr><th class="l">ปี XD</th><th>DPS (บาท)</th></tr></thead>
-        <tbody>${years.map((y) => `<tr><td class="l">${esc(y)}</td><td>${fmt(s.dps[y])}</td></tr>`).join("")}</tbody></table>
+        <table><thead><tr><th class="l">ปี XD</th><th>DPS รวม (บาท)</th><th>ส่วนพิเศษ</th></tr></thead>
+        <tbody>${years.map((y) => `<tr><td class="l">${esc(y)}</td><td>${fmt(s.dps[y])}</td><td>${s.dpss[y] ? fmt(s.dpss[y]) : "–"}</td></tr>`).join("")}</tbody></table>
       </details>`;
     $("detail").hidden = false;
     drawCharts(s);
@@ -305,8 +318,13 @@
     const make = (id, cfg) => charts.push(new window.Chart($(id), cfg));
     make("c-rev", { type: "bar", data: { labels: s.h.p, datasets: [bar("รายได้", s.h.rev, s1), bar("กำไรสุทธิ", s.h.np, s2)] }, options: base(true) });
     make("c-roe", { type: "line", data: { labels: s.h.p, datasets: [{ label: "ROE %", data: s.h.roe, borderColor: s1, backgroundColor: s1, borderWidth: 2, pointRadius: 4, pointBorderColor: surface, pointBorderWidth: 2, spanGaps: false }] }, options: base(false) });
-    const years = Object.keys(s.dps);
-    make("c-dps", { type: "bar", data: { labels: years, datasets: [bar("DPS (บาท)", years.map((y) => s.dps[y]), s1)] }, options: base(false) });
+    const years = Object.keys(s.dps), sp = (y) => s.dpss[y] || 0;
+    const hasSp = years.some((y) => sp(y) > 0);
+    const dpsOpts = base(hasSp);
+    dpsOpts.scales.x.stacked = dpsOpts.scales.y.stacked = true;
+    const dpsSets = [{ ...bar("ปกติ", years.map((y) => +(s.dps[y] - sp(y)).toFixed(4)), s1), borderRadius: hasSp ? 0 : 4 }];
+    if (hasSp) dpsSets.push({ ...bar("พิเศษ", years.map(sp), s2), borderColor: surface, borderWidth: { bottom: 2 } });
+    make("c-dps", { type: "bar", data: { labels: years, datasets: dpsSets }, options: dpsOpts });
     make("c-fcf", { type: "bar", data: { labels: s.h.p, datasets: [bar("FCF", s.h.fcf, s1), bar("ปันผลจ่าย", s.h.div, s2)] }, options: base(true) });
   }
 

@@ -109,15 +109,17 @@ class TestReaders(unittest.TestCase):
         qs = [{"period": f"{y}Q{q}", "net_profit_parent_ttm": str(y * 10 + q), "equity_parent": "1000",
                "gross_profit": "5"}
               for y in range(2021, 2027) for q in range(1, 5) if (y, q) <= (2026, 2)]
-        events = [("2025-05-01", 1.0), ("2025-09-01", 0.5), ("2026-04-01", 2.0), ("2026-07-01", 9.0)]
+        events = [("2025-05-01", 1.0, 0.0), ("2025-09-01", 0.5, 0.0), ("2026-04-01", 2.0, 2.0), ("2026-07-01", 9.0, 8.0)]
         px = {"price": 10.0, "price_date": "2026-10-30", "shares": 1e6, "name": "T", "sector": "",
-              "dps": {}, "div_events": events}
+              "dps": {}, "dps_special": {}, "div_events": events}
         rec = read_setsmart.to_record("T", {"entity_type": "general"}, qs, px)
         self.assertEqual([p["label"] for p in rec["periods"]],
                          ["TTM 2022Q2", "TTM 2023Q2", "TTM 2024Q2", "TTM 2025Q2", "TTM 2026Q2"])
         # ช่วง 2025-07-01 ถึง 2026-06-30: XD 2025-09-01 (0.5) + 2026-04-01 (2.0) · 2026-07-01 อยู่นอกช่วง
         self.assertAlmostEqual(rec["periods"][-1]["div_paid"], 2.5)
+        self.assertAlmostEqual(rec["periods"][-1]["div_special"], 2.0)
         self.assertAlmostEqual(rec["periods"][-2]["div_paid"], 1.0)
+        self.assertAlmostEqual(rec["periods"][-2]["div_special"], 0.0)
         self.assertEqual(rec["periods"][-1]["gross_profit"], 20.0)
         self.assertFalse(rec["fin"])
 
@@ -131,6 +133,45 @@ class TestReaders(unittest.TestCase):
         rec = read_yahoo.to_record(d)
         self.assertEqual(rec["mcap"], 20.0)
         self.assertAlmostEqual(rec["periods"][-1]["div_paid"], 1.5)   # 0.75 บาท × 2 ล้านหุ้น = 1.5 ลบ.
+
+
+class TestSpecialDividend(unittest.TestCase):
+    PX = staticmethod(lambda xd: 10.0)   # ราคาวัน XD = 10 บาท → 1% = 0.10 บาท
+
+    def parts(self, events):
+        return read_yahoo.special_parts(events, self.PX)
+
+    def test_only_excess_over_normal_counts_as_special(self):
+        ev = [("2022-05-01", 0.3), ("2022-09-01", 0.3), ("2023-05-01", 0.3), ("2023-09-01", 0.3), ("2024-05-01", 1.2)]
+        # งวดสุดท้าย 1.2 = ปกติ 0.3 (มัธยฐานงวดเดียวกัน) + พิเศษ 0.9
+        self.assertEqual([round(x, 4) for x in self.parts(ev)], [0, 0, 0, 0, 0.9])
+
+    def test_bank_pattern_final_bigger_than_interim_not_flagged(self):
+        # งวดปลายปีใหญ่กว่ากลางปีราว 3 เท่าทุกปี → เทียบกับงวดเดียวกันของปีก่อน ไม่ใช่งวดข้างเคียง
+        ev = [("2022-04-20", 1.5), ("2022-09-10", 0.5), ("2023-04-20", 1.5), ("2023-09-10", 0.5), ("2024-04-20", 1.6)]
+        self.assertEqual(self.parts(ev)[-1], 0.0)
+
+    def test_too_small_vs_price_not_flagged(self):
+        ev = [("2022-05-01", 0.01), ("2023-05-01", 0.01), ("2024-05-01", 0.05)]   # 0.05 บาท = 0.5% ของราคา
+        self.assertEqual(self.parts(ev)[-1], 0.0)
+
+    def test_needs_history(self):
+        self.assertEqual(self.parts([("2024-05-01", 5.0)]), [0.0])
+
+    def test_metrics_exclude_special(self):
+        ps = [period(f"FY{2022 + i}", np=100.0, equity=1000.0, prev=1000.0, div_paid=50.0) for i in range(3)]
+        ps[-1]["div_paid"], ps[-1]["div_special"] = 80.0, 30.0
+        m = metrics.compute(record(ps))
+        self.assertAlmostEqual(m["dy"], 4.0)
+        self.assertAlmostEqual(m["dy_ex"], 2.5)
+        self.assertAlmostEqual(m["payout_ex"], 50.0)
+        self.assertAlmostEqual(m["sp_share"], 37.5)
+
+    def test_passes_with_alt_metric(self):
+        preset = {"gates": [{"metric": "dy", "op": ">=", "value": 3}]}
+        m = {"dy": 4.0, "dy_ex": 2.5}
+        self.assertTrue(metrics.passes(m, False, preset))
+        self.assertFalse(metrics.passes(m, False, preset, {"dy": "dy_ex"}))
 
 
 if __name__ == "__main__":

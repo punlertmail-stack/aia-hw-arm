@@ -4,9 +4,9 @@
   ticker, name, sector, fin (bool), price, price_date, mcap (ล้านบาท)
   periods: list เรียงเก่า → ใหม่ (ไม่เกิน 5 ช่วง) แต่ละช่วงยาว 12 เดือนและห่างกัน 1 ปี
     label, revenue, np, gross_profit, normalized_np, equity, equity_prev,
-    equity_total, ib_debt, cur_assets, cur_liab, cfo, fcf, div_paid
-    (หน่วยล้านบาท · div_paid เป็นค่าบวก · ไม่มีข้อมูล = None)
-  dps: {ปี ค.ศ.: ปันผลต่อหุ้นรวมในปีนั้น}
+    equity_total, ib_debt, cur_assets, cur_liab, cfo, fcf, div_paid, div_special
+    (หน่วยล้านบาท · div_paid เป็นค่าบวก · div_special = ส่วนที่เป็นปันผลพิเศษ · ไม่มีข้อมูล = None)
+  dps, dps_special: {ปี ค.ศ.: ปันผลต่อหุ้นรวม / เฉพาะงวดพิเศษ ที่ XD ในปีนั้น}
 """
 import statistics
 
@@ -36,6 +36,9 @@ METRICS = {
     "payout":     {"label": "Payout ratio", "unit": "%", "formula": "ปันผลจ่าย ÷ กำไรสุทธิ × 100", "inputs": ["div_paid", "np"]},
     "div_streak": {"label": "จ่ายปันผลต่อเนื่อง", "unit": "ปี", "formula": "จำนวนช่วงล่าสุดติดกันที่จ่ายปันผล > 0", "inputs": ["div_paid"]},
     "fcf_cov3":   {"label": "FCF ÷ ปันผล 3 ปี", "unit": "เท่า", "formula": "ผลรวม FCF 3 ช่วง ÷ ผลรวมปันผลจ่าย 3 ช่วง", "inputs": ["fcf", "div_paid"]},
+    "dy_ex":      {"label": "Dividend yield ไม่รวมพิเศษ", "unit": "%", "formula": "(ปันผลจ่าย − ปันผลพิเศษ) ÷ มูลค่าตลาด × 100", "inputs": ["div_paid", "div_special", "price", "shares"]},
+    "payout_ex":  {"label": "Payout ไม่รวมพิเศษ", "unit": "%", "formula": "(ปันผลจ่าย − ปันผลพิเศษ) ÷ กำไรสุทธิ × 100", "inputs": ["div_paid", "div_special", "np"]},
+    "sp_share":   {"label": "สัดส่วนปันผลพิเศษ", "unit": "%", "formula": "ปันผลพิเศษ ÷ ปันผลจ่ายทั้งหมด (ช่วงล่าสุด) × 100", "inputs": ["div_special", "div_paid"]},
     "np_last":    {"label": "กำไรสุทธิล่าสุด", "unit": "ลบ.", "formula": "กำไรสุทธิส่วนของบริษัทใหญ่ ช่วงล่าสุด", "inputs": ["np"]},
     "np_min3":    {"label": "กำไรต่ำสุด 3 ปี", "unit": "ลบ.", "formula": "กำไรสุทธิต่ำสุดใน 3 ช่วงล่าสุด", "inputs": ["np"]},
 }
@@ -107,6 +110,9 @@ def compute(rec):
     rev = col("revenue")
     nps = col("np")
     np_g = cagr(nps[-4], nps[-1], 3) if len(nps) >= 4 else None
+    div_l, sp_l = L.get("div_paid"), L.get("div_special") or 0
+    # ปันผลพิเศษนับตามวัน XD ส่วน div_paid ของ Yahoo นับตามวันจ่ายเงิน จึงกันไม่ให้ติดลบ
+    div_ex = max(div_l - sp_l, 0) if div_l is not None else None
 
     m = {
         "price": rec.get("price"),
@@ -133,6 +139,9 @@ def compute(rec):
         "payout": pct(L.get("div_paid"), np_l) if np_l and np_l > 0 else None,
         "div_streak": streak(col("div_paid")),
         "fcf_cov3": div(sum(fcf3), sum(divs3)) if fcf3 and divs3 and sum(divs3) > 0 else None,
+        "dy_ex": pct(div_ex, mcap),
+        "payout_ex": pct(div_ex, np_l) if np_l and np_l > 0 else None,
+        "sp_share": min(pct(sp_l, div_l), 100) if div_l else None,
         "np_last": np_l,
         "np_min3": min(nps3) if nps3 else None,
     }
@@ -152,12 +161,14 @@ def history(rec):
     }
 
 
-def passes(m, fin, preset):
-    """ใช้ตรวจจำนวนที่ผ่านตอน build (หน้าเว็บมีตรรกะเดียวกันใน app.js)"""
+def passes(m, fin, preset, alt=None):
+    """ใช้ตรวจจำนวนที่ผ่านตอน build (หน้าเว็บมีตรรกะเดียวกันใน app.js)
+    alt = ตัวชี้วัดที่ใช้แทน เช่น {"dy": "dy_ex"} ตอนเปิด "ไม่นับปันผลพิเศษ\""""
+    alt = alt or {}
     for g in preset["gates"]:
         if fin and g.get("skip_fin"):
             continue
-        v = m.get(g["metric"])
+        v = m.get(alt.get(g["metric"], g["metric"]))
         if v is None:
             return False
         ok = {">=": v >= g["value"], "<=": v <= g["value"], ">": v > g["value"], "<": v < g["value"]}[g["op"]]
