@@ -1,6 +1,6 @@
 ---
 title: Thai Stock Screener 4 มุมมอง
-owner: [ชื่อเล่น]
+owner: arm
 status: draft
 updated: 2026-11-02
 ---
