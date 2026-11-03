@@ -4,26 +4,32 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Thai Stock Screener</title>
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="description" content="คัดหุ้นไทย 4 มุมมอง: คุณภาพราคาเหมาะสม · ปันผลยั่งยืน · หุ้นถูก · หุ้นเติบโต">
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
+<header class="top glass">
   <div class="title-row">
-    <h1>Thai Stock Screener</h1>
-    <div class="source" role="group" aria-label="แหล่งข้อมูล">
+    <div>
+      <p class="eyebrow">AI Investor Alpha · หุ้นไทย 4 มุมมอง</p>
+      <h1>Thai Stock Screener</h1>
+    </div>
+    <div class="seg source" role="group" aria-label="แหล่งข้อมูล">
+      <span class="seg-thumb" aria-hidden="true"></span>
       <button type="button" data-source="yahoo">Yahoo</button>
       <button type="button" data-source="setsmart">SETSMART</button>
     </div>
   </div>
   <p class="badges" id="badges"></p>
-  <nav class="tabs" id="tabs" role="tablist" aria-label="มุมมอง"></nav>
+  <nav class="seg tabs" id="tabs" role="tablist" aria-label="มุมมอง"></nav>
   <p class="preset-desc" id="preset-desc"></p>
 </header>
 
 <main class="layout">
-  <aside class="panel" id="panel">
+  <aside class="panel glass" id="panel">
     <details open>
       <summary>เกณฑ์และน้ำหนัก</summary>
       <section>

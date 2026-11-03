@@ -109,6 +109,9 @@
   }
 
   // ---------- แผงเกณฑ์ ----------
+  // ตำแหน่ง (%) ของค่าบน slider ใช้ระบายส่วนที่เติมสีของราง
+  const fill = (v, min, max) => Math.max(0, Math.min(100, (v - min) / (max - min) * 100));
+
   function rangeCtl(id, labelHtml, value, min, max, step, opts = {}) {
     return `<div class="ctl${opts.off ? " off" : ""}" data-id="${id}">
       <div class="ctl-head">
@@ -116,7 +119,7 @@
         <label for="n-${id}">${labelHtml}</label>
         <span class="val">${opts.prefix || ""}<input type="number" id="n-${id}" data-role="num" value="${value}" min="${min}" max="${max}" step="${step}">${opts.suffix || ""}</span>
       </div>
-      <input type="range" data-role="range" value="${value}" min="${min}" max="${max}" step="${step}" aria-label="${esc(opts.aria || "")}">
+      <input type="range" data-role="range" value="${value}" min="${min}" max="${max}" step="${step}" style="--p:${fill(value, min, max)}%" aria-label="${esc(opts.aria || "")}">
       ${opts.note ? `<div class="note">${opts.note}</div>` : ""}
     </div>`;
   }
@@ -162,6 +165,8 @@
     const v = parseFloat(e.target.value);
     if (Number.isNaN(v)) return;
     ctl.querySelector(role === "num" ? "[data-role=range]" : "[data-role=num]").value = v;
+    const rng = ctl.querySelector("[data-role=range]");
+    rng.style.setProperty("--p", fill(+rng.value, +rng.min, +rng.max) + "%");
     if (id === "mcap") state.minMcap = v;
     else if (id[0] === "g") cur().gates[+id.slice(1)].value = v;
     else {
@@ -302,6 +307,9 @@
     const css = getComputedStyle(document.documentElement);
     const c = (n) => css.getPropertyValue(n).trim();
     const s1 = c("--series-1"), s2 = c("--series-2"), surface = c("--surface"), grid = c("--grid"), ink = c("--text-2");
+    window.Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    window.Chart.defaults.plugins.tooltip.cornerRadius = 10;
+    window.Chart.defaults.plugins.tooltip.padding = 10;
     const base = (legend) => ({
       responsive: true, maintainAspectRatio: false, animation: false,
       interaction: { mode: "index", intersect: false },
@@ -337,12 +345,27 @@
     });
     const m = ds().meta;
     $("badges").innerHTML = `<span>งบ: ${esc(m.period_note)}</span><span>ราคาปิด ${esc(m.price_date)}</span><span>สร้างข้อมูล ${esc(m.built)}</span>`;
-    $("tabs").innerHTML = PRESETS.presets.map((p) => `<button type="button" role="tab" data-preset="${p.id}" aria-selected="${p.id === state.presetId}">${esc(p.name)}</button>`).join("");
+    $("tabs").innerHTML = '<span class="seg-thumb" aria-hidden="true"></span>'
+      + PRESETS.presets.map((p) => `<button type="button" role="tab" data-preset="${p.id}" aria-selected="${p.id === state.presetId}">${esc(p.name)}</button>`).join("");
+    placeThumbs();
     $("preset-desc").textContent = presetDef().desc;
     $("foot-source").textContent = m.source === "yahoo"
       ? `ข้อมูล: Yahoo Finance (finance.yahoo.com) ดึงเมื่อ ${m.fetched} · ราคาปิด ${m.price_date}`
       : `ข้อมูล: ${m.file_note} · ราคาและปันผลต่อหุ้นจาก Yahoo Finance ดึงเมื่อ ${m.fetched}`;
   }
+
+  // segmented control: เลื่อนแคปซูลสีขาวไปอยู่ใต้ปุ่มที่เลือก
+  function placeThumbs() {
+    document.querySelectorAll(".seg").forEach((seg) => {
+      const on = seg.querySelector('[aria-pressed="true"], [aria-selected="true"]');
+      const thumb = seg.querySelector(".seg-thumb");
+      if (!on || !thumb) return;
+      thumb.style.width = on.offsetWidth + "px";
+      thumb.style.transform = `translateX(${on.offsetLeft}px)`;
+    });
+  }
+  addEventListener("resize", placeThumbs);
+  if (document.fonts) document.fonts.ready.then(placeThumbs);   // ความกว้างปุ่มเปลี่ยนหลังฟอนต์โหลดเสร็จ
 
   function renderAll() {
     renderHeader();
