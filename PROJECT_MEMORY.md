@@ -19,6 +19,7 @@
 - วัดตำแหน่งสิ่งที่มีแอนิเมชันใน browser pane ที่ถูกซ่อน ต้องสั่ง `document.getAnimations().forEach(a => a.finish())` ก่อน เพราะนาฬิกาแอนิเมชันค้าง
 - อย่าใช้รายการกำไรค่าเงิน/ขายเงินลงทุนจากงบกระแสเงินสดของ Yahoo มาปรับกำไร — เป็นรายการปรับปรุงที่เครื่องหมายและขอบเขตไม่ตรงกับงบกำไรขาดทุน ใช้ Total Unusual Items − Tax Effect แทน
 - ปุ่มที่ต้องมีแอนิเมชันเลื่อน (segmented control) ต้องสร้าง element ครั้งเดียวแล้วอัปเดตสถานะ ห้าม innerHTML ใหม่ทุก render
+- ตั้งแต่มี workflow อัปเดตข้อมูล บอทจะ commit `output/data/*.js` ทุกวันทำการ → ก่อนแก้งานและก่อน push ต้อง `git pull --rebase` ถ้าชน `output/data/*.js` ให้ใช้ของ GitHub (`git checkout --theirs`) แล้วรัน `screener/refresh.py` ใหม่ ห้ามแก้ไฟล์ข้อมูลด้วยมือ
 - `.gitignore` ของ repo มี `*SETSMART*` และ git บน Windows ไม่แยกตัวพิมพ์ ไฟล์ชื่อ `setsmart...` จะถูก ignore เงียบ ๆ ต้องเพิ่มกฎ `!` เฉพาะไฟล์ที่ตั้งใจให้ขึ้น และเช็กด้วย `git check-ignore -v`
 
 ## บันทึกปัญหา

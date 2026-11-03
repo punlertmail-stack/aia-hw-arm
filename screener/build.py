@@ -5,6 +5,7 @@
   output/data/presets.js   สำเนาของ presets.json ให้หน้าเว็บโหลดได้แม้เปิดแบบ file://
 
 ส่งออกเฉพาะตัวชี้วัดที่คำนวณแล้ว + ประวัติ รายได้/กำไร/ROE/FCF/ปันผลจ่าย สำหรับกราฟ ไม่มีไฟล์ดิบ
+แต่ละหุ้นมีค่าคงที่ k/kc ของตัวชี้วัดที่ขึ้นกับราคา ให้ refresh.py อัปเดตราคาปิดได้ (ดู metrics.price_free)
 
 รัน (จากโฟลเดอร์ repo):  python screener/build.py [--workspace PATH] [--xlsx PATH] [--min-period 2026Q1]
 """
@@ -39,6 +40,7 @@ SPECIAL_PROFIT_NOTE = {
 def stock_row(rec):
     dps = {y: rec["dps"][y] for y in sorted(rec["dps"])[-DPS_YEARS:]}
     dpss = {y: v for y, v in rec["dps_special"].items() if y in dps}
+    k, kc = metrics.price_free(rec)
     return {
         "t": rec["ticker"],
         "n": rec["name"],
@@ -50,17 +52,32 @@ def stock_row(rec):
         "h": metrics.history(rec),
         "dps": dps,
         "dpss": dpss,
+        "k": k,
+        "kc": kc,
     }
 
 
-def write_js(name, meta, recs):
-    payload = {"meta": meta, "stocks": [stock_row(r) for r in recs]}
+def dump_js(name, payload):
     text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / f"{name}.js"
     path.write_text("window.SCREENER_DATA = window.SCREENER_DATA || {};\n"
                     f"window.SCREENER_DATA.{name} = {text};\n", encoding="utf-8")
-    return payload, path
+    return path
+
+
+def load_js(name):
+    """อ่าน output/data/<name>.js กลับเป็น dict (ไม่มีไฟล์ = None)"""
+    path = OUT / f"{name}.js"
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    return json.loads(text[text.index("= {") + 2:text.rindex(";")])
+
+
+def write_js(name, meta, recs):
+    payload = {"meta": meta, "stocks": [stock_row(r) for r in recs]}
+    return payload, dump_js(name, payload)
 
 
 def summarize(name, payload, presets):
@@ -82,6 +99,53 @@ def summarize(name, payload, presets):
           f"  ถ้าสลับสวิตช์ทั้งสอง: ผ่าน {flipped} · มีปันผลพิเศษ {div_flag} ตัว · กำไรพิเศษ ≥ 10% ของกำไร {np_flag} ตัว")
 
 
+def now_stamp():
+    return datetime.now(ICT).strftime("%Y-%m-%d %H:%M ICT")
+
+
+def load_presets():
+    return json.loads((ROOT / "presets.json").read_text(encoding="utf-8"))
+
+
+def yahoo_meta(yahoo, built):
+    price_date = Counter(r["price_date"] for r in yahoo).most_common(1)[0][0]
+    fetched = Counter((r["fetched"] or "")[:10] for r in yahoo).most_common(1)[0][0]
+    last_fy = Counter(r["periods"][-1]["label"] for r in yahoo).most_common(1)[0][0]
+    return {
+        "source": "yahoo", "label": "Yahoo Finance",
+        "period_note": f"งบรายปี ส่วนใหญ่ล่าสุด {last_fy}",
+        "price_date": price_date, "fetched": fetched, "built": built, "updated": built,
+        "url": read_yahoo.URL, "fields": read_yahoo.field_sources(), "metrics": metrics.METRICS,
+        "core_keys": metrics.CORE_KEYS, "special_profit_note": SPECIAL_PROFIT_NOTE["yahoo"],
+    }
+
+
+def build_yahoo(raw_dir, presets, built):
+    """raw_dir/*.json (รูปแบบของ data/fetch.py) → output/data/yahoo.js · คืน (records, payload)"""
+    yahoo = read_yahoo.load(raw_dir)
+    if not yahoo:
+        sys.exit(f"ไม่พบข้อมูล Yahoo ที่ {raw_dir}")
+    payload, _ = write_js("yahoo", yahoo_meta(yahoo, built), yahoo)
+    summarize("yahoo", payload, presets)
+    return yahoo, payload
+
+
+def build_setsmart(xlsx, yahoo, presets, built, min_period):
+    prices = {r["ticker"]: {k: r[k] for k in ("price", "price_date", "shares", "name", "sector", "dps", "dps_special", "div_events")} for r in yahoo}
+    recs, latest = read_setsmart.load(xlsx, prices, min_period)
+    ymeta = yahoo_meta(yahoo, built)
+    meta = {
+        "source": "setsmart", "label": "SETSMART",
+        "period_note": f"TTM ล่าสุด {latest} · ราคาจาก Yahoo",
+        "price_date": ymeta["price_date"], "fetched": ymeta["fetched"], "built": built, "updated": built,
+        "url": None, "file_note": "SETSMART fundamentals 2021Q1–2026Q2 (ไฟล์อยู่ในเครื่องผู้เรียน ไม่ขึ้น GitHub)",
+        "fields": read_setsmart.field_sources(), "metrics": metrics.METRICS,
+        "core_keys": metrics.CORE_KEYS, "special_profit_note": SPECIAL_PROFIT_NOTE["setsmart"],
+    }
+    payload, _ = write_js("setsmart", meta, recs)
+    summarize("setsmart", payload, presets)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workspace", default=str(ROOT.parent.parent))
@@ -89,27 +153,13 @@ def main():
     ap.add_argument("--min-period", default="2026Q1")
     a = ap.parse_args()
     ws = Path(a.workspace)
-    presets = json.loads((ROOT / "presets.json").read_text(encoding="utf-8"))
-    built = datetime.now(ICT).strftime("%Y-%m-%d %H:%M ICT")
+    presets = load_presets()
+    built = now_stamp()
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "presets.js").write_text("window.SCREENER_PRESETS = "
                                     + json.dumps(presets, ensure_ascii=False, indent=1) + ";\n", encoding="utf-8")
 
-    yahoo = read_yahoo.load(ws / "data" / "raw")
-    if not yahoo:
-        sys.exit(f"ไม่พบข้อมูล Yahoo ที่ {ws / 'data' / 'raw'}")
-    price_date = Counter(r["price_date"] for r in yahoo).most_common(1)[0][0]
-    fetched = Counter((r["fetched"] or "")[:10] for r in yahoo).most_common(1)[0][0]
-    last_fy = Counter(r["periods"][-1]["label"] for r in yahoo).most_common(1)[0][0]
-    meta = {
-        "source": "yahoo", "label": "Yahoo Finance",
-        "period_note": f"งบรายปี ส่วนใหญ่ล่าสุด {last_fy}",
-        "price_date": price_date, "fetched": fetched, "built": built,
-        "url": read_yahoo.URL, "fields": read_yahoo.field_sources(), "metrics": metrics.METRICS,
-        "core_keys": metrics.CORE_KEYS, "special_profit_note": SPECIAL_PROFIT_NOTE["yahoo"],
-    }
-    payload, _ = write_js("yahoo", meta, yahoo)
-    summarize("yahoo", payload, presets)
+    yahoo, _ = build_yahoo(ws / "data" / "raw", presets, built)
 
     xlsx = Path(a.xlsx) if a.xlsx else None
     if xlsx is None:
@@ -118,18 +168,7 @@ def main():
     if xlsx is None or not xlsx.exists():
         print("ไม่พบไฟล์ SETSMART xlsx → ข้ามโหมด SETSMART")
         return
-    prices = {r["ticker"]: {k: r[k] for k in ("price", "price_date", "shares", "name", "sector", "dps", "dps_special", "div_events")} for r in yahoo}
-    recs, latest = read_setsmart.load(xlsx, prices, a.min_period)
-    meta = {
-        "source": "setsmart", "label": "SETSMART",
-        "period_note": f"TTM ล่าสุด {latest} · ราคาจาก Yahoo",
-        "price_date": price_date, "fetched": fetched, "built": built,
-        "url": None, "file_note": "SETSMART fundamentals 2021Q1–2026Q2 (ไฟล์อยู่ในเครื่องผู้เรียน ไม่ขึ้น GitHub)",
-        "fields": read_setsmart.field_sources(), "metrics": metrics.METRICS,
-        "core_keys": metrics.CORE_KEYS, "special_profit_note": SPECIAL_PROFIT_NOTE["setsmart"],
-    }
-    payload, _ = write_js("setsmart", meta, recs)
-    summarize("setsmart", payload, presets)
+    build_setsmart(xlsx, yahoo, presets, built, a.min_period)
 
 
 if __name__ == "__main__":

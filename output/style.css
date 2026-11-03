@@ -152,7 +152,21 @@ h1 { margin: 0; font-size: clamp(36px, 4.6vw, 56px); line-height: 1.08; font-wei
 .badges span { background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid var(--hairline); border-radius: 999px; padding: 4px 12px; }
 .preset-desc { margin: 12px 4px 0; color: var(--text-2); font-size: 14px; }
 
-.controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+
+/* ปุ่มอัปเดตข้อมูล: ปุ่มหลักไล่สีเขียว */
+.refresh {
+  display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer;
+  padding: 12px 22px; border-radius: 999px; font-weight: 600; font-size: 15px; color: #fff;
+  background: var(--accent-grad);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 38%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transition: transform .2s, box-shadow .2s, opacity .2s;
+}
+.refresh:hover { transform: translateY(-1px); box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 45%, transparent), inset 0 1px 0 rgba(255, 255, 255, .25); }
+.refresh:disabled { opacity: .7; cursor: progress; transform: none; }
+.refresh .ico { display: inline-block; font-size: 17px; line-height: 1; }
+.refresh.busy .ico { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* แคปซูลเลือก: พื้นขาว ตัวที่เลือกเป็นแคปซูลสีเข้ม (เลื่อนด้วย app.js) */
 .seg {

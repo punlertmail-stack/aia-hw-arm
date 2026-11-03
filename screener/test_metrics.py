@@ -187,6 +187,34 @@ class TestSpecialProfit(unittest.TestCase):
         self.assertAlmostEqual(m["norm_gap"], 33.33)
         self.assertEqual(set(c), set(metrics.CORE_KEYS))
 
+
+class TestReprice(unittest.TestCase):
+    """ราคาใหม่ → ตัวชี้วัดต้องเท่ากับคำนวณใหม่ทั้งหมดด้วยราคานั้น (refresh.py ใช้ทางลัดนี้แทนการมีงบดิบ)"""
+
+    def setUp(self):
+        ps = [period(f"FY{2022 + i}", np=100.0 + 20 * i, equity=1000.0, prev=1000.0) for i in range(4)]
+        ps[-1]["np_special"] = 30.0
+        self.rec = record(ps, mcap=2000.0)          # ราคา 10 บาท × 200 ล้านหุ้น
+
+    def test_matches_full_recompute(self):
+        k, kc = metrics.price_free(self.rec)
+        moved = {**self.rec, "price": 13.0, "mcap": 2600.0}
+        self.assertEqual(metrics.reprice(metrics.compute(self.rec), k, 13.0), metrics.compute(moved))
+        self.assertEqual(metrics.reprice(metrics.compute_core(self.rec), kc, 13.0), metrics.compute_core(moved))
+
+    def test_only_price_metrics_change(self):
+        k, _ = metrics.price_free(self.rec)
+        self.assertEqual(set(k), set(metrics.PRICE_UP + metrics.PRICE_DOWN))
+        m = metrics.compute(self.rec)
+        r = metrics.reprice(m, k, 5.0)
+        self.assertEqual({x for x in m if m[x] != r[x]}, set(k))
+
+    def test_missing_metric_stays_missing(self):
+        self.rec["periods"][-1]["np"] = -10.0       # ขาดทุน → ไม่มี P/E
+        k, _ = metrics.price_free(self.rec)
+        self.assertNotIn("pe", k)
+        self.assertIsNone(metrics.reprice(metrics.compute(self.rec), k, 20.0)["pe"])
+
     def test_passes_with_core(self):
         preset = {"gates": [{"metric": "pe", "op": "<=", "value": 12}]}
         self.assertTrue(metrics.passes({"pe": 10.0}, False, preset))

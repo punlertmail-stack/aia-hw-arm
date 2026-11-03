@@ -1,0 +1,68 @@
+# อัปเดตข้อมูล dashboard: ราคาปิดล่าสุดทุกวันทำการ · งบการเงินเมื่อสั่ง (Run workflow → ติ๊ก statements)
+# ดึงจาก Yahoo Finance ด้วย screener/refresh.py แล้ว commit เฉพาะ output/data/yahoo.js และ setsmart.js
+# ไม่ใช้ key/token ใด ๆ นอกจาก GITHUB_TOKEN ที่ GitHub ให้มากับ workflow เอง
+name: อัปเดตราคาและงบ
+
+on:
+  schedule:
+    - cron: "30 11 * * 1-5"      # 18:30 น. เวลาไทย จันทร์–ศุกร์ (ตลาดปิด 16:30 น.) · GitHub อาจเลื่อนช้ากว่านี้ได้
+  workflow_dispatch:
+    inputs:
+      statements:
+        description: "ดึงงบการเงินใหม่ทั้งตลาดด้วย (ราว 40–60 นาที)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write                # commit ไฟล์ข้อมูล
+  pages: write                   # สั่ง GitHub Pages สร้างเว็บใหม่หลัง commit
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: ติดตั้ง yfinance
+        run: pip install yfinance==1.7.0
+
+      - name: ดึงข้อมูลใหม่
+        id: refresh
+        env:
+          STATEMENTS: ${{ inputs.statements }}
+        run: |
+          if [ "$STATEMENTS" = "true" ]; then
+            python screener/refresh.py --statements
+          else
+            python screener/refresh.py
+          fi
+
+      - name: commit และ push
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRICE_DATE: ${{ steps.refresh.outputs.price_date }}
+          STATEMENTS_DONE: ${{ steps.refresh.outputs.statements }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/data/yahoo.js output/data/setsmart.js
+          if git diff --cached --quiet; then
+            echo "ข้อมูลเหมือนเดิม ไม่ต้อง commit"
+            exit 0
+          fi
+          what="ราคาปิด $PRICE_DATE"
+          if [ "$STATEMENTS_DONE" = "yes" ]; then what="งบ + $what"; fi
+          git commit -m "อัปเดตข้อมูลอัตโนมัติ: $what"
+          git pull --rebase
+          git push
+          # push ด้วย GITHUB_TOKEN ไม่ปลุก workflow อื่น จึงสั่ง Pages สร้างเว็บใหม่เอง
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" --silent || echo "สั่ง Pages build ไม่สำเร็จ — เว็บจะอัปเดตเมื่อมี push ครั้งถัดไป"

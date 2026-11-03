@@ -334,7 +334,7 @@
     const inputs = isCore && d.inputs.includes("np") ? [...d.inputs, "np_special"] : d.inputs;
     const items = [...new Set(inputs)].map((f) => {
       const src = meta.fields[f] || { name: f };
-      const when = f === "price" ? `ราคาปิด ${meta.price_date}` : f === "shares" ? `ดึงเมื่อ ${meta.fetched}` : `${s.per}${src.how ? " · " + src.how : ""}`;
+      const when = f === "price" ? `ราคาปิด ${s.pd || meta.price_date}` : f === "shares" ? `ดึงเมื่อ ${meta.fetched}` : `${s.per}${src.how ? " · " + src.how : ""}`;
       const tpl = src.url || (meta.url && src.page ? meta.url.replace("{page}", src.page) : null);
       const url = tpl ? tpl.replace("{t}", encodeURIComponent(s.t)) : null;
       return `<li><code>${esc(src.name)}</code> <span class="muted">· ${esc(when)}</span>${url ? ` · <a href="${url}" target="_blank" rel="noopener">เปิดที่มา</a>` : ""}</li>`;
@@ -449,7 +449,7 @@
       if (b.disabled) b.title = "ไม่มีไฟล์ข้อมูลนี้";
     });
     const m = ds().meta;
-    $("badges").innerHTML = `<span>งบ: ${esc(m.period_note)}</span><span>ราคาปิด ${esc(m.price_date)}</span><span>สร้างข้อมูล ${esc(m.built)}</span>`;
+    $("badges").innerHTML = `<span>งบ: ${esc(m.period_note)}</span><span>ราคาปิด ${esc(m.price_date)}</span><span>อัปเดต ${esc(m.updated || m.built)}</span>`;
     // สร้างปุ่มครั้งเดียว แล้วอัปเดตแค่สถานะ — แคปซูลจะได้เลื่อนจากแท็บเดิมไปแท็บใหม่ ไม่ใช่งอกใหม่ทุกครั้ง
     if (!$("tabs").querySelector("[data-preset]")) {
       $("tabs").innerHTML = '<span class="seg-thumb" aria-hidden="true"></span>'
@@ -497,6 +497,59 @@
     const open = themeNow() === "auto" && !$("detail").hidden && $("detail-title").textContent;
     if (open) openDetail(open);
   });
+
+  // ---------- ปุ่มอัปเดตข้อมูล ----------
+  // หน้าเว็บดึงจาก Yahoo เองไม่ได้ (Yahoo ไม่อนุญาตให้เว็บอื่นเรียกตรง) — GitHub Actions ดึงให้ทุกวันทำการแล้ว commit ไฟล์ data/*.js
+  // ปุ่มนี้โหลดไฟล์เหล่านั้นใหม่แบบไม่ใช้แคช แล้วคำนวณทั้งหน้าใหม่ด้วยค่าเกณฑ์ที่ผู้ใช้ตั้งไว้
+  const ACTIONS_URL = "https://github.com/punlertmail-stack/aia-hw-arm/actions/workflows/refresh.yml";
+  const stampOf = (name) => DATA[name] && (DATA[name].meta.updated || DATA[name].meta.built);
+
+  // วันทำการล่าสุดที่ควรมีราคาปิดแล้ว (ตัดที่ 17:00 น. เวลาไทย ไม่รวมวันหยุดนักขัตฤกษ์) → ใช้เตือนว่าข้อมูลเก่า
+  function expectedClose() {
+    const th = new Date(Date.now() + 7 * 3600e3);
+    if (th.getUTCHours() < 17) th.setUTCDate(th.getUTCDate() - 1);
+    while ([0, 6].includes(th.getUTCDay())) th.setUTCDate(th.getUTCDate() - 1);
+    return th.toISOString().slice(0, 10);
+  }
+
+  function loadScript(src) {
+    return new Promise((ok, fail) => {
+      const el = document.createElement("script");
+      el.src = src;
+      el.onload = () => { el.remove(); ok(); };
+      el.onerror = () => { el.remove(); fail(new Error(src)); };
+      document.head.appendChild(el);
+    });
+  }
+
+  async function refreshData(btn) {
+    const before = Object.fromEntries(SOURCES.map((n) => [n, stampOf(n)]));
+    btn.disabled = true;
+    btn.classList.add("busy");
+    const v = Date.now();
+    const results = await Promise.allSettled(SOURCES.map((n) => loadScript(`data/${n}.js?v=${v}`)));
+    btn.disabled = false;
+    btn.classList.remove("busy");
+    const open = !$("detail").hidden && $("detail-title").textContent;
+    renderAll();
+    if (open) openDetail(open);
+    const m = ds().meta, want = expectedClose();
+    const changed = SOURCES.some((n) => stampOf(n) !== before[n]);
+    const failed = results.some((r) => r.status === "rejected");
+    const pop = $("popover");
+    pop.innerHTML = `<h3>${failed ? "โหลดไฟล์ข้อมูลไม่สำเร็จ" : changed ? "โหลดข้อมูลใหม่แล้ว" : "ข้อมูลล่าสุดแล้ว"}</h3>
+      <ul>
+        <li>ราคาปิด <strong>${esc(m.price_date)}</strong>${m.price_date < want ? ` <span class="chip warn">ยังไม่มีราคาปิด ${esc(want)}</span>` : ""}</li>
+        <li>งบ: ${esc(m.period_note)} · ดึงงบเมื่อ ${esc(m.fetched)}</li>
+        <li>อัปเดตไฟล์เมื่อ ${esc(m.updated || m.built)}</li>
+      </ul>
+      <p class="muted">ราคาปิดอัปเดตอัตโนมัติทุกวันทำการราว 18:30 น. · งบอัปเดตเมื่อสั่ง${m.source === "setsmart" ? " (โหมด SETSMART อัปเดตเฉพาะราคา งบมาจากไฟล์ในเครื่องผู้เรียน)" : ""}<br>
+        <a href="${ACTIONS_URL}" target="_blank" rel="noopener">สั่งอัปเดตทันที / ดึงงบใหม่</a> (เจ้าของ repo กด Run workflow ใน GitHub Actions)</p>`;
+    pop.hidden = false;
+    const b = btn.getBoundingClientRect();
+    pop.style.left = Math.max(16, Math.min(b.right - pop.offsetWidth, innerWidth - pop.offsetWidth - 16)) + "px";
+    pop.style.top = b.bottom + 8 + "px";
+  }
 
   function renderAll() {
     renderHeader();
@@ -546,6 +599,7 @@
     state.sort = { key: k, dir: k === "t" ? 1 : -1 };
     renderResults();
   });
+  $("refresh").addEventListener("click", (e) => { e.stopPropagation(); refreshData(e.currentTarget); });
   $("reset").addEventListener("click", () => { Object.assign(state, fresh()); renderPanel(); renderResults(); });
   $("detail-close").addEventListener("click", closeDetail);
   document.addEventListener("keydown", (e) => {

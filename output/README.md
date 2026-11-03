@@ -19,6 +19,12 @@
 
 ![ปันผลพิเศษ](screenshot-special.png)
 
+## ข้อมูลอัปเดตอย่างไร
+
+- **ราคาปิด:** GitHub Actions (`.github/workflows/refresh.yml`) รัน `screener/refresh.py` ทุกวันทำการ 18:30 น. แล้ว commit ไฟล์ใน `data/`
+- **งบการเงิน:** เจ้าของ repo เปิด [Actions → อัปเดตราคาและงบ](https://github.com/punlertmail-stack/aia-hw-arm/actions/workflows/refresh.yml) กด Run workflow แล้วติ๊ก statements
+- **ปุ่ม "อัปเดตข้อมูล" บนหน้าเว็บ:** โหลดไฟล์ข้อมูลล่าสุดแบบไม่ใช้แคช และบอกวันที่ราคาปิด/งบ (หน้าเว็บดึงจาก Yahoo เองไม่ได้ เพราะ Yahoo ไม่ให้เว็บอื่นเรียกตรง)
+
 ## ไฟล์ในโฟลเดอร์นี้
 
 | ไฟล์ | คืออะไร |

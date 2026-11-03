@@ -95,6 +95,11 @@ def rnd(v, nd=2):
 
 def compute(rec):
     """record รูปแบบกลาง → {ชื่อตัวชี้วัด: ค่า} (คำนวณไม่ได้ = None)"""
+    return {k: rnd(v, 0 if k == "mcap" else 2) for k, v in compute_raw(rec).items()}
+
+
+def compute_raw(rec):
+    """เหมือน compute() แต่ไม่ปัดเศษ (ใช้หาค่าคงที่ใน price_free)"""
     ps = rec["periods"]
     L = ps[-1]
     col = lambda k: [p.get(k) for p in ps]
@@ -146,7 +151,7 @@ def compute(rec):
         "np_last": np_l,
         "np_min3": min(nps3) if nps3 else None,
     }
-    return {k: rnd(v, 0 if k == "mcap" else 2) for k, v in m.items()}
+    return m
 
 
 # ตัวชี้วัดที่เปลี่ยนเมื่อใช้ "กำไรปกติ" แทนกำไรสุทธิ (payout ไม่อยู่ในนี้ เพราะแท็บปันผลไม่มีสวิตช์กำไรพิเศษ)
@@ -164,6 +169,39 @@ def compute_core(rec):
     """ตัวชี้วัดชุดกำไรปกติ — คืนเฉพาะ CORE_KEYS"""
     m = compute({**rec, "periods": core_periods(rec)})
     return {k: m[k] for k in CORE_KEYS}
+
+
+# ตัวชี้วัดที่ขึ้นกับราคา: กลุ่มแรกแปรผันตรง (x = k × ราคา) กลุ่มหลังแปรผกผัน (x = k ÷ ราคา)
+# ตัวอื่นไม่ขึ้นกับราคาเลย — refresh.py จึงอัปเดตราคาปิดได้โดยไม่ต้องมีงบดิบ
+PRICE_UP = ["price", "mcap", "pe", "pbv", "peg"]
+PRICE_DOWN = ["ey", "by", "dy", "fcfy", "dy_ex"]
+
+
+def _free(raw, price, keys):
+    out = {}
+    for k in keys:
+        v = raw.get(k)
+        if v is None:
+            continue
+        out[k] = float(f"{(v / price if k in PRICE_UP else v * price):.10g}")
+    return out
+
+
+def price_free(rec):
+    """ค่าคงที่ k ของตัวชี้วัดที่ขึ้นกับราคา → (ชุดปกติ, ชุดกำไรปกติ) ใช้กับ reprice()"""
+    price = rec["price"]
+    keys = PRICE_UP + PRICE_DOWN
+    core = compute_raw({**rec, "periods": core_periods(rec)})
+    return _free(compute_raw(rec), price, keys), _free(core, price, [k for k in keys if k in CORE_KEYS])
+
+
+def reprice(m, k, price):
+    """คำนวณตัวชี้วัดที่ขึ้นกับราคาใหม่จากราคาปิดใหม่ (ตัวอื่นคงเดิม) · ปัดเศษเหมือน compute()"""
+    out = dict(m)
+    for key, c in k.items():
+        v = c * price if key in PRICE_UP else c / price
+        out[key] = rnd(v, 0 if key == "mcap" else 2)
+    return out
 
 
 def history(rec):
